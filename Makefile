@@ -3,24 +3,24 @@ CC=stack ghc --
 
 SRC=$(wildcard src/*.hs)
 LLVM_SRC=$(wildcard src/Llvm/*.hs) $(SRC)
-LEX=src/ParLatte.hs src/LexLatte.hs
+LEX=src/Parser/ParLatte.hs src/Parser/LexLatte.hs
 BINS=insc_llvm
 RUNTIME=lib/runtime.bc
 
 all: $(LEX) $(BINS) $(RUNTIME)
 
 insc_llvm: $(LEX) $(LLVM_SRC)
-	$(CC) -isrc --make src/Llvm/Compiler.hs -o insc_llvm
+	$(CC) -isrc --make src/Compiler.hs -o insc_llvm
 
-src/ParLatte.y src/LexLatte.x: src/Latte.cf
-	cd src; /home/students/inf/PUBLIC/MRJP/bin/bnfc Latte.cf
-	cp lib/ErrM.hs src/
+src/Parser/ParLatte.y src/Parser/LexLatte.x: src/Parser/Latte.cf
+	cd src/Parser; /home/students/inf/PUBLIC/MRJP/bin/bnfc Latte.cf
+	cp lib/ErrM.hs src/Parser/
 
-src/ParLatte.hs: src/ParLatte.y
+src/Parser/ParLatte.hs: src/Parser/ParLatte.y
 	cd src; happy -gca ParLatte.y
 
-src/LexLatte.hs: src/LexLatte.x
-	cd src; alex -g LexLatte.x
+src/Parser/LexLatte.hs: src/Parser/LexLatte.x
+	cd src/Parser; alex -g LexLatte.x
 
 lib/runtime.bc:
 	cd lib; llvm-as -o runtime.bc runtime.ll
