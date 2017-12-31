@@ -1,16 +1,37 @@
-module State where
+module Llvm.State where
 
 import Control.Monad ( foldM, liftM )
 import Control.Monad.Trans.State.Lazy
 import qualified Data.Map as Map
 import Data.Maybe
 
-import Core
+import Llvm.Core
 
-import AbsInstant
+import AbsLatte
 import ErrM
 
 
+-------------------------- Frontend state --------------------------------
+-- | Context analysis (frontend) state
+data FrontEnv a = FrontEnv {
+  identTypes :: Map.Map Ident (Type a)
+}
+  deriving (Show)
+
+data FrontState a = FrontSt {
+  env :: FrontEnv a
+}
+  deriving (Show)
+
+-- | A monad to run frontend in
+type FrontM a = StateT (FrontState a) Err
+
+emptyFrontState :: FrontState a
+emptyFrontState = FrontSt (FrontEnv Map.empty)
+
+
+-------------------------- Backend state ---------------------------------
+{-|
 type Counter = Integer
 type IdentEnv = Map.Map Ident Addr
 -- | Whole environment
@@ -22,12 +43,13 @@ data GenState = St {
 }
   deriving (Show)
 
--- | A monad to compile program in
+-- | A monad to run backend in
 type GenM = StateT GenState Err
 
 -- | Create empty environment
 emptyState :: GenState
 emptyState = St Map.empty 1 0 []     -- start numerating locals from 1
+
 
 
 -- ----------------------- Operations on environment ----------------------
@@ -66,3 +88,5 @@ getLocalsCount :: GenM Integer
 getLocalsCount = do
   locals <- gets locals
   return $ locals
+
+|-}

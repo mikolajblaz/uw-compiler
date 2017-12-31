@@ -3,13 +3,13 @@ module Llvm.Emitter where
 import Control.Monad ( liftM2 )
 import Control.Monad.Trans.State.Lazy
 
-import AbsInstant
+import AbsLatte
 import ErrM
 
-import Core
-import State
+import Llvm.Core
+import Llvm.State
 
-
+{-|
 -- helper functions
 printAddr :: Addr -> String
 printAddr (Immediate a) = show a
@@ -59,3 +59,4 @@ emitFunctionEnd :: GenM ()
 emitFunctionEnd = do
   emitIndent 0 "  ret i32 0"
   emitIndent 0 "}"
+|-}

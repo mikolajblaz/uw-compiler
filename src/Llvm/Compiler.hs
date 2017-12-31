@@ -9,11 +9,14 @@ import qualified System.Directory as SD
 import System.IO
 import System.Process
 
-import AbsInstant
+import AbsLatte
+import LexLatte
+import ParLatte
 import ErrM
 
-import Core
-import qualified Llvm.Generator
+import Llvm.Core
+import qualified Llvm.Generator as Generator
+import qualified Llvm.Frontend as Frontend
 
 main :: IO ()
 main = do
@@ -24,7 +27,7 @@ main = do
 handleError :: IOException -> IO a
 handleError e = do
   let err = show e
-  hPutStrLn stderr $ "ERROR: " ++ err
+  hPutStrLn stderr $ "ERROR\n" ++ err
   exitFailure
 
 
@@ -37,7 +40,7 @@ processArgs args = do
   unless exists $ throw $ userError $ "File " ++ fileName ++ " doesn't exist"
 
   let extension = takeExtension fileName
-  unless (extension == ".ins") $ throw $ userError "Wrong file extension (must be .ins)"
+  unless (extension == ".lat") $ throw $ userError "Wrong file extension (must be .lat)"
 
   input <- readFile fileName;
   output <- runCompiler input
@@ -45,7 +48,7 @@ processArgs args = do
   let llFile = replaceExtension fileName ".ll"
   let bcFile = replaceExtension fileName ".bc"
   writeFile llFile output
-
+{-|
   -- assemble
   -- llvm-as -o in.bc in.ll
   asOutput <- readProcess "llvm-as" ["-o", bcFile, llFile] ""
@@ -55,9 +58,18 @@ processArgs args = do
   -- llvm-link -o in.bc in.bc runtime.bc
   linkOutput <- readProcess "llvm-link" ["-o", bcFile, bcFile, "lib/runtime.bc"] ""
   putStr linkOutput
-
+|-}
+  putStr output
 
 runCompiler :: String -> IO String
-runCompiler input = case Llvm.Generator.runGenerator input of
-    Ok s -> return $ concatInstructions s
-    Bad s -> throw $ userError s
+runCompiler input = do
+  abstractSyntax <- fromErrToIO $ pProgram $ myLexer input
+  frontendOut <- fromErrToIO $ Frontend.runContextAnalysis abstractSyntax
+  return frontendOut
+  -- backendOut <- fromErrToIO $ Generator.runGenerator abstractSyntax
+  -- return $ concatInstructions backendOut
+
+fromErrToIO :: Err a -> IO a
+fromErrToIO out = case out of
+  Ok s -> return s
+  Bad s -> throw $ userError s

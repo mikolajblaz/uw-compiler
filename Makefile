@@ -1,16 +1,15 @@
 CC=stack ghc --
 # TODO change to ghc
 
-SRC=$(wildcard src/*.hs)
-LLVM_SRC=$(wildcard src/Llvm/*.hs) $(SRC)
+SRC=$(wildcard src/*.hs) $(wildcard src/Llvm/*.hs)
 LEX=src/ParLatte.hs src/LexLatte.hs
-BINS=insc_llvm
+BINS=latc_llvm
 RUNTIME=lib/runtime.bc
 
 all: $(LEX) $(BINS) $(RUNTIME)
 
-insc_llvm: $(LEX) $(LLVM_SRC)
-	$(CC) -isrc --make src/Llvm/Compiler.hs -o insc_llvm
+latc_llvm: $(LEX) $(SRC)
+	$(CC) -isrc --make src/Llvm/Compiler.hs -o latc_llvm
 
 src/ParLatte.y src/LexLatte.x: src/Latte.cf
 	cd src; /home/students/inf/PUBLIC/MRJP/bin/bnfc Latte.cf
@@ -26,8 +25,8 @@ lib/runtime.bc:
 	cd lib; llvm-as -o runtime.bc runtime.ll
 
 run: all
-	./insc_llvm ./tests/test.ins    # generates tests/in1.ll and tests/in1.bc
-	lli tests/test.bc               # runtime.bc already linked
+	./latc_llvm ./tests/official/good/core002.lat    # generates tests/in1.ll and tests/in1.bc
+	# lli tests/test.bc               # runtime.bc already linked
 
 clean:
 	-rm -f src/*.log src/*.aux src/*.hi src/*.o src/*.dvi

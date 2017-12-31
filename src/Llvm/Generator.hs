@@ -3,24 +3,24 @@ module Llvm.Generator where
 import Control.Monad ( liftM, when )
 import Control.Monad.Trans.State.Lazy
 
-import AbsInstant
-import LexInstant
-import ParInstant
+import AbsLatte
+import LexLatte
+import ParLatte
 import ErrM
 
-import Core
-import State
+import Llvm.Core
+import Llvm.State
 import Llvm.Emitter
 
 
 -- | Main compiling function
-runGenerator :: String -> Err [Instruction]
-runGenerator input = do
-  abstractSyntax <- pProgram $ myLexer input
+runGenerator :: Program a -> Err [Instruction]
+runGenerator program = do
   -- retrieve output from state (and reverse it)
-  liftM (reverse . output . snd) $ runStateT (genProgram abstractSyntax) emptyState
+  -- liftM (reverse . output . snd) $ runStateT (genProgram program) emptyState
+  return []
 
-
+{-|
 ------------ Instructions generation ---------------------
 -- Return all generated instructions
 genProgram :: Program -> GenM ()
@@ -72,3 +72,5 @@ genBinOp op e1 e2 = do
   r <- freshRegister
   emitBinOp op r a1 a2
   return r
+
+|-}
