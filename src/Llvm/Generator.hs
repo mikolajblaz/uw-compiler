@@ -1,7 +1,6 @@
 module Llvm.Generator where
 
 import Control.Monad ( liftM, when )
-import Control.Monad.Trans.State.Lazy
 
 import AbsLatte
 import LexLatte

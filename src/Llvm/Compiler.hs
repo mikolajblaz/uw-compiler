@@ -1,6 +1,7 @@
 module Llvm.Compiler where
 
 import Control.Monad
+import Control.Monad.Trans.State.Lazy
 
 import AbsLatte
 import LexLatte
@@ -15,21 +16,22 @@ import qualified Llvm.Frontend as Frontend
 
 runCompiler :: String -> Err String
 runCompiler input = do
-  abstractSyntax <- pProgram $ myLexer input
-  processProgram abstractSyntax
-
-  -- backendOut <- fromErrToIO $ Generator.runGenerator abstractSyntax
-  -- return $ concatInstructions backendOut
-
-
-processProgram :: Program Pos -> Err String -- TODO type
-processProgram program = do
-  topEnv <- Frontend.buildTopEnv program
-  return $ "OK"
+  absProgram <- pProgram $ myLexer input
+  output <- liftM output $ execStateT (processProgram absProgram) (initState emptyEnv)
+  -- TODO postprocess (concatenate, etc.)
+  return "OK"
 
 
-processFun :: TopDef Pos -> GenM ()
-processFun (FnDef pos ty ident args block) = do
+processProgram :: Program Pos -> GenM ()
+processProgram (Program _ topDefs) = do
+  Frontend.buildTopEnv topDefs
+  Frontend.checkMain
+  mapM_ processTopDef topDefs
+
+
+
+processTopDef :: TopDef Pos -> GenM ()
+processTopDef (FnDef pos ty ident args block) = do
   startNewFun ty
   processArgs args
   processBlock block
@@ -44,13 +46,21 @@ processArgs = undefined
 
 
 
-processBlock :: Block Pos -> GenM ()
-processBlock (Block pos stmts) = do
+processBlock :: Block Pos -> SBlockLabel -> Maybe SBlockLabel -> GenM ()
+processBlock (Block pos stmts) sb nextSb = do
+  oldBlockEnv <- gets blockEnv
+  oldOuterEnv <- gets outerEnv
+  let newOuterEnv = blockToOuterEnv oldBlockEnv oldOuterEnv
+  setNewEnvs emptyEnv newOuterEnv
+  -- Now, process block in an empty block environment
   mapM_ processStmt stmts
+  -- Set old environment back, discarding everything that was in the block
+  setNewEnvs oldBlockEnv oldOuterEnv
 
 
-processStmt :: Stmt Pos -> GenM ()
-processStmt (BStmt _ b) = processBlock b
+-- processStmt stmt currentBlock nextBlock
+processStmt :: Stmt Pos -> SBlockLabel -> Maybe SBlockLabel -> GenM ()
+processStmt (BStmt _ b) sb nextSb = processBlock b
 
 -- process single declaration
 processStmt (Decl pos ty [NoInit pos2 ident]) =
@@ -59,9 +69,10 @@ processStmt (Decl pos ty [NoInit pos2 ident]) =
 processStmt (Decl pos ty [Init pos2 ident exp]) = do
   Frontend.expectType ty exp
   undefined
+  -- check if not void
   -- idea:
   -- tmp_var = expr
-  -- int x = tmp_var -- wykorzystać assignment
+  -- int x = tmp_var --> use assignment>
 
 -- multiple declarations
 processStmt (Decl pos ty items) = do

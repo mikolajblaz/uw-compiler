@@ -11,49 +11,51 @@ import AbsLatte
 import ErrM
 
 
-type TypeEnv a = Map.Map Ident (Type a)
+type TypeEnv = Map.Map Ident (Type Pos)
 
 -------------------------- Frontend state --------------------------------
 -- | Context analysis (frontend) state
-data GenState a = St {
-  blockEnv :: TypeEnv a,
-  outerEnv :: TypeEnv a
+data GenState = GenSt {
+  blockEnv :: TypeEnv,
+  outerEnv :: TypeEnv,
+  topEnv :: TypeEnv,
+  output :: [String]
 }
   deriving (Show)
 
 -- | A monad to run frontend in
-type GenM = StateT (GenState Pos) Err
-
-emptyFrontState :: GenState a
-emptyFrontState = St Map.empty Map.empty
-
-
--------------------------- Backend state ---------------------------------
-{-|
-type Counter = Integer
-type IdentEnv = Map.Map Ident Addr
--- | Whole environment
-data GenState = St {
-  env :: IdentEnv,
-  locals :: Counter,
-  registers :: Counter,       -- not used in JVM
-  output :: [Instruction]     -- not used in JVM
-}
-  deriving (Show)
-
--- | A monad to run backend in
 type GenM = StateT GenState Err
 
--- | Create empty environment
-emptyState :: GenState
-emptyState = St Map.empty 1 0 []     -- start numerating locals from 1
+emptyEnv = Map.empty
+
+initState :: TypeEnv -> GenState
+initState topEnv = GenSt Map.empty Map.empty topEnv []
 
 
-|-}
 -- ----------------------- Operations on environment ----------------------
 
+-- Inside GenM
 startNewFun :: Type Pos -> GenM ()
 startNewFun = undefined
+
+setNewEnvs :: TypeEnv -> TypeEnv -> GenM ()
+setNewEnvs blockEnv outerEnv = modify setNew
+  where
+    setNew (GenSt be oe te out) = GenSt blockEnv outerEnv te out
+
+
+-- Outside GenM
+-- | Insert block environment to outer environment.
+blockToOuterEnv :: TypeEnv -> TypeEnv -> TypeEnv
+blockToOuterEnv blockEnv outerEnv = Map.union outerEnv blockEnv
+
+
+
+
+
+----------------------------- Blocks ---------------------------------------
+getNewBlockLabel :: GenM SBlockLabel
+getNewBlockLabel = undefined
 
 {-|
 getAddr :: Ident -> GenM Addr
