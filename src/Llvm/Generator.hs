@@ -10,15 +10,15 @@ import ErrM
 
 import Llvm.Core
 import Llvm.State
-import Llvm.Emitter
+-- import Llvm.Emitter
 
 
--- | Main compiling function
-runGenerator :: Program a -> Err [Instruction]
-runGenerator program = do
-  -- retrieve output from state (and reverse it)
-  -- liftM (reverse . output . snd) $ runStateT (genProgram program) emptyState
-  return []
+genStmt :: Stmt Pos -> GenM ()
+genStmt = undefined
+
+
+genExpr :: Expr Pos -> GenM Addr
+genExpr = undefined
 
 {-|
 ------------ Instructions generation ---------------------

@@ -11,23 +11,21 @@ import AbsLatte
 import ErrM
 
 
+type TypeEnv a = Map.Map Ident (Type a)
+
 -------------------------- Frontend state --------------------------------
 -- | Context analysis (frontend) state
-data FrontEnv a = FrontEnv {
-  identTypes :: Map.Map Ident (Type a)
-}
-  deriving (Show)
-
-data FrontState a = FrontSt {
-  env :: FrontEnv a
+data GenState a = St {
+  blockEnv :: TypeEnv a,
+  outerEnv :: TypeEnv a
 }
   deriving (Show)
 
 -- | A monad to run frontend in
-type FrontM a = StateT (FrontState a) Err
+type GenM = StateT (GenState Pos) Err
 
-emptyFrontState :: FrontState a
-emptyFrontState = FrontSt (FrontEnv Map.empty)
+emptyFrontState :: GenState a
+emptyFrontState = St Map.empty Map.empty
 
 
 -------------------------- Backend state ---------------------------------
@@ -51,9 +49,13 @@ emptyState :: GenState
 emptyState = St Map.empty 1 0 []     -- start numerating locals from 1
 
 
-
+|-}
 -- ----------------------- Operations on environment ----------------------
 
+startNewFun :: Type Pos -> GenM ()
+startNewFun = undefined
+
+{-|
 getAddr :: Ident -> GenM Addr
 getAddr ident = do
   env <- gets env

@@ -1,34 +1,34 @@
 module Llvm.Frontend where
 
-import Control.Monad ( foldM, liftM )
+import Control.Monad ( foldM, liftM, unless )
 import Control.Monad.Trans.State.Lazy
 import qualified Data.Map as Map
 import Data.Maybe
 
 import Llvm.Core
+import Llvm.State
 
 import AbsLatte
 import ErrM
 
-runContextAnalysis :: Program Pos -> Err String -- TODO type
-runContextAnalysis program = do
-  topEnv <- buildTopEnv program
-  return $ "OK"
+
+updateEnv :: Stmt Pos -> Err (Type Pos)
+updateEnv = undefined
+-- sprawdź czy w blockEnv nie ma już tego identyfikatora
+-- potem zasłoń
+-- jeśli to jest BlockStmt, to mergeEnvs i wystartuj z pustym blockEnv
 
 
 ---------------------------------------------------------------------
-
-type TopEnv a = Map.Map Ident (Type a)
-
 getArgType :: Arg a -> Type a
 getArgType (Arg _ t _) = t
 
 -- | Build data environment basing on 'data' declarations
-buildTopEnv :: Program Pos -> Err (TopEnv Pos)
+buildTopEnv :: Program Pos -> Err (TypeEnv Pos)
 buildTopEnv (Program _ defs) = do
   foldM (flip insertTopDef) Map.empty defs
 
-insertTopDef :: TopDef Pos -> (TopEnv Pos) -> Err (TopEnv Pos)
+insertTopDef :: TopDef Pos -> (TypeEnv Pos) -> Err (TypeEnv Pos)
 insertTopDef (FnDef pos ty ident@(Ident i) args _) topEnv = case Map.lookup ident topEnv of
   -- Just _ -> failPos pos $ "Function " ++ show ident ++ " already declared"
   Just _ -> failPos pos $ "Function " ++ show i ++ " already declared"
@@ -36,8 +36,38 @@ insertTopDef (FnDef pos ty ident@(Ident i) args _) topEnv = case Map.lookup iden
     where
       funType = Fun pos ty (map getArgType args)
 
-------------------------------------------------------------------------------
+----------------------- Type check -------------------------------------------
+checkTypeStmt :: Stmt Pos -> GenM (Type Pos)
+checkTypeStmt = undefined
 
+checkType :: Expr Pos -> GenM (Type Pos)
+checkType = undefined
+
+expectType :: Type Pos -> Expr Pos -> GenM ()
+expectType ty exp = do
+  expTy <- checkType exp
+  unless (ty == expTy) $ failPos pos $
+      "Type error, got: " ++ show expTy ++ ", expected: " ++ show ty
+    where
+      pos = getPosFromType ty
+
+getPosFromType :: Type Pos -> Pos
+getPosFromType = undefined
+
+
+------------------------------------------------------------------------------
+-- Returns
+checkReturnEnding :: GenM ()
+checkReturnEnding = undefined
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------
 -- staticTypeCheck :: Exp -> Env Type -> DataEnv -> Err Type
 -- staticTypeCheck exp env de = runReaderT (checkType de exp) env
 --

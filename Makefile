@@ -9,7 +9,7 @@ RUNTIME=lib/runtime.bc
 all: $(LEX) $(BINS) $(RUNTIME)
 
 latc_llvm: $(LEX) $(SRC)
-	$(CC) -isrc --make src/Llvm/Compiler.hs -o latc_llvm
+	$(CC) -isrc --make src/Llvm/CompilerIO.hs -o latc_llvm
 
 src/ParLatte.y src/LexLatte.x: src/Latte.cf
 	cd src; /home/students/inf/PUBLIC/MRJP/bin/bnfc Latte.cf
