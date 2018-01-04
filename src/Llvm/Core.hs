@@ -36,8 +36,8 @@ failPos (Just (line, pos)) s = fail $ "Error in line " ++ show line ++ ", positi
 
 defaultInit :: Type Pos -> Expr Pos -- TODO
 defaultInit (Int pos) = ELitInt pos 0
-defaultInit (Void pos) = undefined
 defaultInit _ = undefined
+defaultInit (Void pos) = undefined  -- this should not happen
 
 concatInstrs :: [Instr] -> Instr
 concatInstrs = unlines

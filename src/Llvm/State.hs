@@ -57,6 +57,9 @@ blockToOuterEnv blockEnv outerEnv = Map.union outerEnv blockEnv
 getNewBlockLabel :: GenM SBlockLabel
 getNewBlockLabel = undefined
 
+setCurrentBlock :: SBlockLabel -> GenM ()
+setCurrentBlock = undefined
+
 {-|
 getAddr :: Ident -> GenM Addr
 getAddr ident = do

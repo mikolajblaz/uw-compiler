@@ -49,6 +49,10 @@ checkMain = do
 
 
 ----------------------- Type check -------------------------------------------
+forbidVoid :: Type Pos -> GenM ()
+forbidVoid (Void pos) = failPos pos $ "Type error, variables cannot have void type"
+forbidVoid _ = return ()
+
 checkTypeStmt :: Stmt Pos -> GenM (Type Pos)
 checkTypeStmt = undefined
 

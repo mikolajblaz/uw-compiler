@@ -46,40 +46,44 @@ processArgs = undefined
 
 
 
-processBlock :: Block Pos -> SBlockLabel -> Maybe SBlockLabel -> GenM ()
-processBlock (Block pos stmts) sb nextSb = do
+processBlock :: Maybe SBlockLabel -> Block Pos -> GenM ()
+processBlock nextSb (Block pos stmts) = do
   oldBlockEnv <- gets blockEnv
   oldOuterEnv <- gets outerEnv
   let newOuterEnv = blockToOuterEnv oldBlockEnv oldOuterEnv
   setNewEnvs emptyEnv newOuterEnv
   -- Now, process block in an empty block environment
-  mapM_ processStmt stmts
-  -- Set old environment back, discarding everything that was in the block
+  mapM_ (processStmt Nothing) (init stmts)
+  processStmt nextSb (last stmts)
+  -- Set old environment back, discarding everything that was inside the block
   setNewEnvs oldBlockEnv oldOuterEnv
 
 
 -- processStmt stmt currentBlock nextBlock
-processStmt :: Stmt Pos -> SBlockLabel -> Maybe SBlockLabel -> GenM ()
-processStmt (BStmt _ b) sb nextSb = processBlock b
+processStmt :: Maybe SBlockLabel -> Stmt Pos -> GenM ()
+processStmt nextSb (BStmt _ b) = processBlock nextSb b
 
 -- process single declaration
-processStmt (Decl pos ty [NoInit pos2 ident]) =
-    processStmt (Decl pos ty [Init pos2 ident (defaultInit ty)])
+processStmt nextSb (Decl pos ty [NoInit pos2 ident]) = do
+  Frontend.forbidVoid ty
+  processStmt nextSb (Decl pos ty [Init pos2 ident (defaultInit ty)])
 
-processStmt (Decl pos ty [Init pos2 ident exp]) = do
-  Frontend.expectType ty exp
-  undefined
-  -- check if not void
+processStmt nextSb stmt@(Decl pos ty [Init pos2 ident expr]) = do
+  Frontend.forbidVoid ty
+  Frontend.expectType ty expr
+  Generator.genStmt nextSb stmt
+  undefined  -- TODO
   -- idea:
   -- tmp_var = expr
   -- int x = tmp_var --> use assignment>
 
 -- multiple declarations
-processStmt (Decl pos ty items) = do
+processStmt nextSb (Decl pos ty items) = do
   let singleDecls = map (\item -> Decl pos ty [item]) items
-  mapM_ processStmt singleDecls
+  mapM_ (processStmt Nothing) (init singleDecls)
+  processStmt nextSb (last singleDecls)
 
 -- other statements
-processStmt stmt  = do
+processStmt nextSb stmt  = do
   Frontend.checkTypeStmt stmt
-  Generator.genStmt stmt
+  Generator.genStmt nextSb stmt

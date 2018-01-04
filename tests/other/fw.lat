@@ -1,0 +1,60 @@
+// Patryk Czajka
+
+class Arr {
+    int[] t;
+}
+
+void printAll(Arr[] t, int[] I) {
+    for(int i: I) {
+        printString("===");
+        printInt(i + 1);
+        printString("===");
+
+        for(int j: I)
+            printInt(t[i].t[j]);
+    }    
+}
+
+boolean has_neg_cycle(Arr[] t, int[] I) {
+    for(int i: I)
+        if(t[i].t[i] < 0)
+            return true;
+    return false;
+}
+
+int main() {
+    Arr[] t;
+    int[] I;
+
+    int n = readInt();
+    t = new Arr[n];
+    I = new int[n];
+    
+    {
+        int i;
+        while(i < n) {
+            I[i] = i;
+            i++;
+        }
+    }
+    
+    for(int i: I) {
+        t[i] = new Arr;
+        t[i].t = new int[n];
+    }
+
+    for(int i: I) for(int j: I)
+        t[i].t[j] = readInt();
+    
+    for(int k: I) for(int i: I) for(int j: I)
+        if(t[i].t[j] > t[i].t[k] + t[k].t[j])
+            t[i].t[j] = t[i].t[k] + t[k].t[j];
+
+    if(has_neg_cycle(t, I))
+        printString("Negative cycle, I'm sorry.");
+    else
+        printAll(t, I);
+
+    printString("OK");
+    return 0;
+}
