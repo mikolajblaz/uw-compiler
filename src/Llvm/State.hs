@@ -1,9 +1,8 @@
 module Llvm.State where
 
-import Control.Monad ( foldM, liftM )
+import Control.Monad ( foldM )
 import Control.Monad.Trans.State.Lazy
 import qualified Data.Map as Map
-import Data.Maybe
 
 import Llvm.Core
 
@@ -11,49 +10,69 @@ import AbsLatte
 import ErrM
 
 
-type TypeEnv = Map.Map Ident (Type Pos)
-
 -------------------------- Compiler state --------------------------------
+type Counter = Integer
+
 -- | Compiler state
 data GenState = GenSt {
-  blockEnv :: TypeEnv,
-  outerEnv :: TypeEnv,
-  topEnv :: TypeEnv,
-  output :: [String]
+  blockEnv :: IdentEnv,
+  outerEnv :: IdentEnv,
+  topEnv :: IdentEnv,
+  output :: [String],
+  -- counters
+  identCnt :: Counter
 }
   deriving (Show)
 
 -- | A monad to run compiler in
 type GenM = StateT GenState Err
 
+emptyEnv :: IdentEnv
 emptyEnv = Map.empty
 
-initState :: TypeEnv -> GenState
-initState topEnv = GenSt Map.empty Map.empty topEnv []
+initState :: IdentEnv -> GenState
+initState topEnv = GenSt Map.empty topEnv topEnv [] 0
+-- TODO rethink putting topEnv to outerEnv (it's probably correct)
 
 
--- ----------------------- Operations on environment ----------------------
+
+---------------------------- Helpers --------------------------------------
+getIdentType :: Ident -> GenM (Type Pos)
+getIdentType = undefined
+
+getArgType :: Arg a -> Type a
+getArgType (Arg _ t _) = t
+
+getTypePos :: Type Pos -> Pos
+getTypePos typos = case typos of
+  Int pos -> pos
+  Str pos -> pos
+  Bool pos -> pos
+  Void pos -> pos
+  Fun pos _ _ -> pos
+
+-- Counters
+incIdentCnt :: GenState -> (Counter, GenState)
+incIdentCnt (GenSt be oe te out idc) = (idc, GenSt be oe te out (idc + 1))
+
+-------------------------- Operations on state ----------------------
 
 -- Inside GenM
 startNewFun :: Type Pos -> GenM ()
 startNewFun = undefined
 
-setNewEnvs :: TypeEnv -> TypeEnv -> GenM ()
-setNewEnvs blockEnv outerEnv = modify setNew
-  where
-    setNew (GenSt be oe te out) = GenSt blockEnv outerEnv te out
+-- Ident
+freshIdent :: Ident -> GenM UniqueIdent
+freshIdent (Ident ident) = do
+  identCnt <- state incIdentCnt
+  return $ UIdent ident identCnt
 
-getIdentType :: Ident -> GenM (Type Pos)
-getIdentType = undefined
+--  Blocks
+freshLabel :: GenM Label
+freshLabel = undefined
 
--- Outside GenM
--- | Insert block environment to outer environment.
-blockToOuterEnv :: TypeEnv -> TypeEnv -> TypeEnv
-blockToOuterEnv blockEnv outerEnv = Map.union outerEnv blockEnv
-
-
-getArgType :: Arg a -> Type a
-getArgType (Arg _ t _) = t
+setCurrentBlock :: Label -> GenM ()
+setCurrentBlock = undefined
 
 -- TopEnv
 buildTopEnv :: [TopDef Pos] -> GenM ()
@@ -62,25 +81,65 @@ buildTopEnv defs = do
   -- nothing in state yet, so simply call initState
   put $ initState topEnv
 
-insertTopDef :: TopDef Pos -> TypeEnv -> GenM TypeEnv
-insertTopDef (FnDef pos ty ident@(Ident i) args _) topEnv = case Map.lookup ident topEnv of
-  -- Just _ -> failPos pos $ "Function " ++ show ident ++ " already declared"
-  Just _ -> failPos pos $ "Function " ++ show i ++ " already declared"
-  Nothing -> return $ Map.insert ident funType topEnv
-    where
-      funType = Fun pos ty (map getArgType args)
+getIdentVal :: Ident -> GenM EnvVal
+getIdentVal ident = do
+  bEnv <- gets blockEnv
+  case Map.lookup ident bEnv of
+    Just val -> return val
+    Nothing -> do {
+      oEnv <- gets outerEnv;
+      case Map.lookup ident oEnv of
+        Just val -> return val
+        Nothing -> fail $ "No such variable: " ++ show ident
+    }
 
-insertUnique :: Ident -> (Type Pos) -> TypeEnv -> GenM TypeEnv
-insertUnique = undefined -- as above
+------------------- Operations on identifiers environment -----------------
+
+setNewEnvs :: IdentEnv -> IdentEnv -> GenM ()
+setNewEnvs blockEnv outerEnv = modify setNew
+  where
+    setNew (GenSt _ _ te out idc) = GenSt blockEnv outerEnv te out idc
+
+setNewEnv :: IdentEnv -> GenM ()
+setNewEnv blockEnv = modify setNew
+  where
+    setNew (GenSt _ oe te out idc) = GenSt blockEnv oe te out idc
+
+
+-- Outside GenM
+-- | Insert block environment to outer environment.
+blockToOuterEnv :: IdentEnv -> IdentEnv -> IdentEnv
+blockToOuterEnv blockEnv outerEnv = Map.union outerEnv blockEnv
 
 
 
------------------------------ Blocks ---------------------------------------
-freshLabel :: GenM SBlockLabel
-freshLabel = undefined
+insertUnique :: Ident -> EnvVal -> IdentEnv -> GenM IdentEnv
+insertUnique ident val@(ty, _, _) env = case Map.lookup ident env of
+    Just _ -> failPos (getTypePos ty) $ show ident ++ " already declared"
+    Nothing -> return $ Map.insert ident val env
 
-setCurrentBlock :: SBlockLabel -> GenM ()
-setCurrentBlock = undefined
+insertUniqueNewIdent :: Ident -> (Type Pos) -> Addr -> IdentEnv -> GenM IdentEnv
+insertUniqueNewIdent ident ty addr env = do
+  uniqueIdent <- freshIdent ident
+  insertUnique ident (ty, uniqueIdent, addr) env
+
+
+insertTopDef :: TopDef Pos -> IdentEnv -> GenM IdentEnv
+insertTopDef (FnDef pos ty ident args _) topEnv = do
+  let funType = Fun pos ty (map getArgType args)
+  insertUniqueNewIdent ident ty (FunA ident) topEnv
+
+
+insertLocalDecl :: Ident -> (Type Pos) -> GenM Addr
+insertLocalDecl ident ty = do
+  uniqueIdent <- freshIdent ident
+  let identAddr = Loc uniqueIdent
+  blockEnv <- gets blockEnv
+  newBlockEnv <- insertUnique ident (ty, uniqueIdent, identAddr) blockEnv
+  setNewEnv newBlockEnv
+  return identAddr
+
+
 
 {-|
 getAddr :: Ident -> GenM Addr

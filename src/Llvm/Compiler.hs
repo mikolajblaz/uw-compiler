@@ -34,6 +34,7 @@ processTopDef :: TopDef Pos -> GenM ()
 processTopDef (FnDef pos ty ident args block) = do
   startNewFun ty
   processArgs args
+  -- TODO set outer env
   processBlock Nothing block -- TODO Nothing?
   Frontend.checkReturnEnding
 
@@ -46,45 +47,45 @@ processArgs = undefined
 
 
 
-processBlock :: Maybe SBlockLabel -> Block Pos -> GenM ()
-processBlock nextSb (Block pos stmts) = do
+processBlock :: Maybe Label -> Block Pos -> GenM ()
+processBlock nextL (Block pos stmts) = do
   oldBlockEnv <- gets blockEnv
   oldOuterEnv <- gets outerEnv
   let newOuterEnv = blockToOuterEnv oldBlockEnv oldOuterEnv
   setNewEnvs emptyEnv newOuterEnv
   -- Now, process block in an empty block environment
   mapM_ (processStmt Nothing) (init stmts)
-  processStmt nextSb (last stmts)
+  processStmt nextL (last stmts)
   -- Set old environment back, discarding everything that was inside the block
   setNewEnvs oldBlockEnv oldOuterEnv
 
 
 -- processStmt stmt currentBlock nextBlock
-processStmt :: Maybe SBlockLabel -> Stmt Pos -> GenM ()
-processStmt nextSb (BStmt _ b) = processBlock nextSb b
+processStmt :: Maybe Label -> Stmt Pos -> GenM ()
+processStmt nextL (BStmt _ b) = processBlock nextL b
 
 -- process single declaration
-processStmt nextSb (Decl pos ty [NoInit pos2 ident]) = do
+processStmt nextL (Decl pos ty [NoInit pos2 ident]) = do
   Frontend.forbidVoid ty
-  processStmt nextSb (Decl pos ty [Init pos2 ident (defaultInit ty)])
+  processStmt nextL (Decl pos ty [Init pos2 ident (defaultInit ty)])
 
-processStmt nextSb stmt@(Decl pos ty [Init pos2 ident expr]) = do
+processStmt nextL stmt@(Decl pos ty [Init pos2 ident expr]) = do
   Frontend.forbidVoid ty
   Frontend.expectType ty expr
-  Generator.genStmt nextSb stmt
-  -- TODO change environment
+  -- NOTE: environment changes inside genStmt call
+  Generator.genStmt nextL stmt
   undefined  -- TODO
   -- idea:
   -- tmp_var = expr
   -- int x = tmp_var --> use assignment>
 
 -- multiple declarations
-processStmt nextSb (Decl pos ty items) = do
+processStmt nextL (Decl pos ty items) = do
   let singleDecls = map (\item -> Decl pos ty [item]) items
   mapM_ (processStmt Nothing) (init singleDecls)
-  processStmt nextSb (last singleDecls)
+  processStmt nextL (last singleDecls)
 
 -- other statements
-processStmt nextSb stmt  = do
+processStmt nextL stmt  = do
   Frontend.checkTypeStmt stmt
-  Generator.genStmt nextSb stmt
+  Generator.genStmt nextL stmt

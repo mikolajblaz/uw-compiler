@@ -12,8 +12,8 @@ import Llvm.State
 -- import qualified Llvm.Emitter as Emitter
 
 
-establishNextLabel :: Maybe SBlockLabel -> GenM SBlockLabel
-establishNextLabel nextSb = maybe freshLabel return nextSb
+establishNextLabel :: Maybe Label -> GenM Label
+establishNextLabel nextL = maybe freshLabel return nextL
 
 
 -- genStmt Invariant #1
@@ -25,27 +25,25 @@ establishNextLabel nextSb = maybe freshLabel return nextSb
 --      l <- freshLabel
 -- will eventually call
 --      setCurrentBlock l
-genStmt :: Maybe SBlockLabel -> Stmt Pos -> GenM ()
-genStmt nextSb (Empty _) = do
-  maybeJump nextSb
+genStmt :: Maybe Label -> Stmt Pos -> GenM ()
+genStmt nextL (Empty _) = do
+  maybeJump nextL
 
-genStmt nextSb (Ass _ ident expr) = do
+genStmt nextL (Ass _ ident expr) = do
   rhsAddr <- genExpr expr
   lhsAddr <- genLhs ident
   ty <- getIdentType ident
   genAss ty lhsAddr rhsAddr
-  maybeJump nextSb
+  maybeJump nextL
 
-genStmt nextSb (Decl _ ty [Init _ ident expr]) = do
+genStmt nextL (Decl _ ty [Init _ ident expr]) = do
   rhsAddr <- genExpr expr
-  -- TODO here the environment changes
-  -- TODO how to do it?
-  let lhsAddr = rhsAddr
+  lhsAddr <- insertLocalDecl ident ty
   genAss ty lhsAddr rhsAddr
-  maybeJump nextSb
+  maybeJump nextL
 
-genStmt nextSb (Cond _ cond thenStmt) = do
-  afterLabel <- establishNextLabel nextSb
+genStmt nextL (Cond _ cond thenStmt) = do
+  afterLabel <- establishNextLabel nextL
   thenLabel <- freshLabel
   genCond cond thenLabel afterLabel
 
@@ -54,8 +52,8 @@ genStmt nextSb (Cond _ cond thenStmt) = do
 
   setCurrentBlock afterLabel
 
-genStmt nextSb (CondElse _ cond thenStmt elseStmt) = do
-  afterLabel <- establishNextLabel nextSb
+genStmt nextL (CondElse _ cond thenStmt elseStmt) = do
+  afterLabel <- establishNextLabel nextL
   thenLabel <- freshLabel
   elseLabel <- freshLabel
   genCond cond thenLabel elseLabel
@@ -88,9 +86,9 @@ genStmt nextSb (CondElse _ cond thenStmt elseStmt) = do
 
 
 -- these shouldn't happen
-genStmt nextSb (BStmt pos _) = failPos pos $ "Compiler error"
+genStmt nextL (BStmt pos _) = failPos pos $ "Compiler error"
 -- single decl already handled
-genStmt nextSb (Decl pos _ _) = failPos pos $ "Compiler error"
+genStmt nextL (Decl pos _ _) = failPos pos $ "Compiler error"
 
 
 
@@ -103,24 +101,24 @@ genAss ty lhsAddr rhsAddr = do
 
 ------------------------- Jumps ---------------------------------------------
 
-maybeJump :: Maybe SBlockLabel -> GenM ()
+maybeJump :: Maybe Label -> GenM ()
 maybeJump Nothing = return ()
-maybeJump (Just nextSb) = genJump nextSb
+maybeJump (Just nextL) = genJump nextL
 -- maybeJump = maybe (return ()) genJump -- TODO check this out
 
 -- Important:
 -- All those (and only those) finish a block
 -- TODO all these must call finishBlock!
-genJump :: SBlockLabel -> GenM ()
+genJump :: Label -> GenM ()
 genJump = undefined
 
-genCondJump :: Addr -> SBlockLabel -> SBlockLabel -> GenM ()
+genCondJump :: Addr -> Label -> Label -> GenM ()
 genCondJump = undefined
 
-genRet :: Expr Pos -> SBlockLabel -> GenM ()
+genRet :: Expr Pos -> Label -> GenM ()
 genRet = undefined
 
-genVRet :: SBlockLabel -> GenM ()
+genVRet :: Label -> GenM ()
 genVRet = undefined
 
 ------------------------- Expressions ---------------------------------------
@@ -136,7 +134,7 @@ genLhs ident = undefined
 
 
 ------------------------- Conditions ----------------------------------------
-genCond :: Expr Pos -> SBlockLabel -> SBlockLabel -> GenM ()
+genCond :: Expr Pos -> Label -> Label -> GenM ()
 genCond = undefined
 
 {-|
