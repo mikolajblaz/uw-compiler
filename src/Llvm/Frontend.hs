@@ -19,26 +19,6 @@ updateEnv = undefined
 -- jeśli to jest BlockStmt, to mergeEnvs i wystartuj z pustym blockEnv
 
 
------------------- Build functions environment --------------------------------
-
-getArgType :: Arg a -> Type a
-getArgType (Arg _ t _) = t
-
--- | Build data environment basing on 'data' declarations
-buildTopEnv :: [TopDef Pos] -> GenM ()
-buildTopEnv defs = do
-  topEnv <- foldM (flip insertTopDef) Map.empty defs
-  -- nothing in state yet, so simply call initState
-  put $ initState topEnv
-
-insertTopDef :: TopDef Pos -> TypeEnv -> GenM TypeEnv
-insertTopDef (FnDef pos ty ident@(Ident i) args _) topEnv = case Map.lookup ident topEnv of
-  -- Just _ -> failPos pos $ "Function " ++ show ident ++ " already declared"
-  Just _ -> failPos pos $ "Function " ++ show i ++ " already declared"
-  Nothing -> return $ Map.insert ident funType topEnv
-    where
-      funType = Fun pos ty (map getArgType args)
-
 ----------------------- Main function  ---------------------------------------
 checkMain :: GenM ()
 checkMain = do

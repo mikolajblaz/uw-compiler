@@ -1,4 +1,4 @@
-CC=stack ghc --
+CC=ghc
 # TODO change to ghc
 
 SRC=$(wildcard src/*.hs) $(wildcard src/Llvm/*.hs)

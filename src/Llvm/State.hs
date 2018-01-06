@@ -13,8 +13,8 @@ import ErrM
 
 type TypeEnv = Map.Map Ident (Type Pos)
 
--------------------------- Frontend state --------------------------------
--- | Context analysis (frontend) state
+-------------------------- Compiler state --------------------------------
+-- | Compiler state
 data GenState = GenSt {
   blockEnv :: TypeEnv,
   outerEnv :: TypeEnv,
@@ -23,7 +23,7 @@ data GenState = GenSt {
 }
   deriving (Show)
 
--- | A monad to run frontend in
+-- | A monad to run compiler in
 type GenM = StateT GenState Err
 
 emptyEnv = Map.empty
@@ -43,6 +43,8 @@ setNewEnvs blockEnv outerEnv = modify setNew
   where
     setNew (GenSt be oe te out) = GenSt blockEnv outerEnv te out
 
+getIdentType :: Ident -> GenM (Type Pos)
+getIdentType = undefined
 
 -- Outside GenM
 -- | Insert block environment to outer environment.
@@ -50,12 +52,32 @@ blockToOuterEnv :: TypeEnv -> TypeEnv -> TypeEnv
 blockToOuterEnv blockEnv outerEnv = Map.union outerEnv blockEnv
 
 
+getArgType :: Arg a -> Type a
+getArgType (Arg _ t _) = t
+
+-- TopEnv
+buildTopEnv :: [TopDef Pos] -> GenM ()
+buildTopEnv defs = do
+  topEnv <- foldM (flip insertTopDef) Map.empty defs
+  -- nothing in state yet, so simply call initState
+  put $ initState topEnv
+
+insertTopDef :: TopDef Pos -> TypeEnv -> GenM TypeEnv
+insertTopDef (FnDef pos ty ident@(Ident i) args _) topEnv = case Map.lookup ident topEnv of
+  -- Just _ -> failPos pos $ "Function " ++ show ident ++ " already declared"
+  Just _ -> failPos pos $ "Function " ++ show i ++ " already declared"
+  Nothing -> return $ Map.insert ident funType topEnv
+    where
+      funType = Fun pos ty (map getArgType args)
+
+insertUnique :: Ident -> (Type Pos) -> TypeEnv -> GenM TypeEnv
+insertUnique = undefined -- as above
 
 
 
 ----------------------------- Blocks ---------------------------------------
-getNewBlockLabel :: GenM SBlockLabel
-getNewBlockLabel = undefined
+freshLabel :: GenM SBlockLabel
+freshLabel = undefined
 
 setCurrentBlock :: SBlockLabel -> GenM ()
 setCurrentBlock = undefined

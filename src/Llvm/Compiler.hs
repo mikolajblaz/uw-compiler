@@ -24,7 +24,7 @@ runCompiler input = do
 
 processProgram :: Program Pos -> GenM ()
 processProgram (Program _ topDefs) = do
-  Frontend.buildTopEnv topDefs
+  buildTopEnv topDefs
   Frontend.checkMain
   mapM_ processTopDef topDefs
 
@@ -34,7 +34,7 @@ processTopDef :: TopDef Pos -> GenM ()
 processTopDef (FnDef pos ty ident args block) = do
   startNewFun ty
   processArgs args
-  processBlock block
+  processBlock Nothing block -- TODO Nothing?
   Frontend.checkReturnEnding
 
 -- | Update environment
@@ -72,6 +72,7 @@ processStmt nextSb stmt@(Decl pos ty [Init pos2 ident expr]) = do
   Frontend.forbidVoid ty
   Frontend.expectType ty expr
   Generator.genStmt nextSb stmt
+  -- TODO change environment
   undefined  -- TODO
   -- idea:
   -- tmp_var = expr

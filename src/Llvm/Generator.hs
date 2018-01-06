@@ -12,46 +12,59 @@ import Llvm.State
 -- import qualified Llvm.Emitter as Emitter
 
 
--- Invariant #1
+establishNextLabel :: Maybe SBlockLabel -> GenM SBlockLabel
+establishNextLabel nextSb = maybe freshLabel return nextSb
+
+
+-- genStmt Invariant #1
 -- when genStmt is called, there is some block started already
 -- (stored in state in currentBlock)
 
--- Invariant #2
+-- genStmt Invariant #2
 -- a function calling
---      l <- getNewBlockLabel
+--      l <- freshLabel
 -- will eventually call
 --      setCurrentBlock l
-
--- TODO but who starts block e.g. in Empty below?
--- TODO possible answer: genStmt Empty doesn't jump, it generates a jump!
--- TODO Inv #2 should be an aswer
-
 genStmt :: Maybe SBlockLabel -> Stmt Pos -> GenM ()
 genStmt nextSb (Empty _) = do
   maybeJump nextSb
 
+genStmt nextSb (Ass _ ident expr) = do
+  rhsAddr <- genExpr expr
+  lhsAddr <- genLhs ident
+  ty <- getIdentType ident
+  genAss ty lhsAddr rhsAddr
+  maybeJump nextSb
+
+genStmt nextSb (Decl _ ty [Init _ ident expr]) = do
+  rhsAddr <- genExpr expr
+  -- TODO here the environment changes
+  -- TODO how to do it?
+  let lhsAddr = rhsAddr
+  genAss ty lhsAddr rhsAddr
+  maybeJump nextSb
+
 genStmt nextSb (Cond _ cond thenStmt) = do
   afterLabel <- establishNextLabel nextSb
-  thenLabel <- getNewBlockLabel
+  thenLabel <- freshLabel
   genCond cond thenLabel afterLabel
 
   setCurrentBlock thenLabel
-  genStmt afterLabel thenStmt
+  genStmt (Just afterLabel) thenStmt
 
   setCurrentBlock afterLabel
 
-
 genStmt nextSb (CondElse _ cond thenStmt elseStmt) = do
   afterLabel <- establishNextLabel nextSb
-  thenLabel <- getNewBlockLabel
-  elseLabel <- getNewBlockLabel
+  thenLabel <- freshLabel
+  elseLabel <- freshLabel
   genCond cond thenLabel elseLabel
 
   setCurrentBlock thenLabel
-  genStmt afterLabel thenStmt
+  genStmt (Just afterLabel) thenStmt
 
   setCurrentBlock elseLabel
-  genStmt afterLabel elseStmt
+  genStmt (Just afterLabel) elseStmt
 
   setCurrentBlock afterLabel
 
@@ -77,19 +90,23 @@ genStmt nextSb (CondElse _ cond thenStmt elseStmt) = do
 -- these shouldn't happen
 genStmt nextSb (BStmt pos _) = failPos pos $ "Compiler error"
 -- single decl already handled
-genStmt nextSb (Decl pos _ _ _) = failPos pos $ "Compiler error"
+genStmt nextSb (Decl pos _ _) = failPos pos $ "Compiler error"
 
 
-maybeJump :: Maybe SBlockLabel -> Gen ()
+
+-- Specific statements
+genAss :: Type Pos -> Addr -> Addr -> GenM ()
+genAss ty lhsAddr rhsAddr = do
+  undefined
+  -- TODO
+
+
+------------------------- Jumps ---------------------------------------------
+
+maybeJump :: Maybe SBlockLabel -> GenM ()
 maybeJump Nothing = return ()
 maybeJump (Just nextSb) = genJump nextSb
 -- maybeJump = maybe (return ()) genJump -- TODO check this out
-
-
-establishNextLabel :: Maybe SBlockLabel -> GenM SBlockLabel
-establishNextLabel nextSb = maybe getNewBlockLabel id nextSb
-
-------------------------- Jumps ---------------------------------------------
 
 -- Important:
 -- All those (and only those) finish a block
@@ -108,13 +125,19 @@ genVRet = undefined
 
 ------------------------- Expressions ---------------------------------------
 
+-- TODO genExpr -> genRhs
+
 genExpr :: Expr Pos -> GenM Addr
 genExpr = undefined
 
 
+genLhs :: Ident -> GenM Addr
+genLhs ident = undefined
+
 
 ------------------------- Conditions ----------------------------------------
 genCond :: Expr Pos -> SBlockLabel -> SBlockLabel -> GenM ()
+genCond = undefined
 
 {-|
 ------------ Instructions generation ---------------------
