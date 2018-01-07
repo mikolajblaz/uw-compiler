@@ -9,59 +9,86 @@ import ErrM
 import Llvm.Core
 import Llvm.State
 
-emitCmp :: Addr -> RelOp Pos -> TType -> Addr -> Addr -> GenM ()
-emitCmp resAddr rel ty lAddr rAddr = undefined
-
-emitStore = undefined
-
-{-|
 -- helper functions
 printAddr :: Addr -> String
-printAddr (Immediate a) = show a
-printAddr (Reg a) = "%r" ++ show a
-printAddr (Loc a) = "%loc" ++ show a
+printAddr (AImm a _) = show a
+printAddr (AReg a _) = "%r" ++ show a
+printAddr (ALoc (UIdent var num) _) = "%loc" ++ show num ++ "_" ++ show var
+printAddr _ = undefined
 
--- check if in range (inclusive)
-inRange :: Integer -> Integer -> Integer -> Bool
-inRange a l r = a >= l && a <= r
+printAddrTyped :: Addr -> String
+printAddrTyped = undefined
+
+getAddrType :: Addr -> TType
+getAddrType = undefined
+
+split :: Addr -> (String, TType)
+split a = (printAddr a, getAddrType a)
+
+printRelOp :: RelOp Pos -> String
+printRelOp (LTH _) = "slt"
+printRelOp (LE _) = "sle"
+printRelOp (GTH _) = "sgt"
+printRelOp (GE _) = "sge"
+printRelOp (EQU _) = "eq"
+printRelOp (NE _) = "ne"
 
 ------------------------------------------------------------
 -- basic function for emitting all instructions
-emit :: String -> GenM ()
+emit :: Instr -> GenM ()
 emit = emitIndent 2
 
 -- add instruction to output (to the front!)
-emitIndent :: Int -> String -> GenM ()
-emitIndent indent str = do
-  let newIntrs = replicate indent ' ' ++ str
-  St env l r o <- get
-  put $ St env l r (newIntrs:o)
+emitIndent :: Int -> Instr -> GenM ()
+emitIndent indent instr = do
+  let newIntrs = replicate indent ' ' ++ instr
+  modify $ addInstr instr
 
--- specific emitters, all of them use function emit
-emitBinOp :: String -> Addr -> Addr -> Addr -> GenM ()
-emitBinOp op r a1 a2 = emit $
-  (printAddr r) ++ " = " ++ op ++ " i32 " ++ (printAddr a1) ++ ", " ++ (printAddr a2)
-
-emitLoad :: Addr -> Addr -> GenM ()
-emitLoad src dest = emit $ (printAddr dest) ++ " = load i32, i32* " ++ printAddr src
-
-emitStore :: Addr -> Addr -> GenM ()
-emitStore src dest = emit $ "store i32 " ++ (printAddr src) ++ ", i32* " ++ (printAddr dest)
+--------- specific emitters, all of them use function emit ------------------
 
 emitAlloc :: Addr -> GenM ()
-emitAlloc a = emit $ (printAddr a) ++ " = alloca i32"
+emitAlloc a = let (regName, ty) = split a in
+  emit $ regName ++ " = alloca " ++ show ty
 
-emitPrintInt :: Addr -> GenM ()
-emitPrintInt a = emit $ "call void @printInt(i32 " ++ printAddr a ++ ")"
+emitLoad :: Addr -> Addr -> GenM ()
+emitLoad src dest = let (destReg, destTy) = split dest in
+  emit $ destReg ++ " = load " ++ show destTy ++ ", " ++ printAddrTyped src
+
+emitStore :: Addr -> Addr -> GenM ()
+emitStore src dest = emit $ "store " ++ printAddrTyped src ++ ", " ++ printAddrTyped dest
+
+emitBinOp :: String -> Addr -> Addr -> Addr -> GenM ()
+emitBinOp op r a1 a2 = let (regName, ty) = split r in
+  emit $ regName ++ " = " ++ op ++ " " ++ show ty ++ " " ++ printAddr a1 ++ ", " ++ printAddr a2
+
+emitCmp :: Addr -> RelOp Pos -> Addr -> Addr -> GenM ()
+emitCmp resAddr rel lAddr rAddr = let (lName, lTy) = split lAddr in
+  emit $ printAddr resAddr ++ " = icmp " ++ printRelOp rel ++ " " ++ show lTy ++ lName ++ ", " ++ printAddr rAddr
+
+emitCall :: GenM ()
+emitCall = undefined
+
+emitRet :: Addr -> GenM ()
+emitRet a = emit $ "ret " ++ printAddrTyped a
+
+emitVRet :: GenM()
+emitVRet = emit "ret void"
+
+-- TODO remove
+-- emitPrintInt :: Addr -> GenM ()
+-- emitPrintInt a = emit $ "call void @printInt(i32 " ++ printAddr a ++ ")"
 
 emitDeclarations :: GenM ()
-emitDeclarations = emitIndent 0 "declare void @printInt(i32)"
+emitDeclarations = mapM_ (emitIndent 0) [
+    "declare void @printInt(i32)",
+    "declare void @printString(" ++ show TStr ++ ")",
+    "declare void @error()",
+    "declare i32 @readInt()",
+    "declare " ++ show TStr ++ " @readString()"
+  ]
 
-emitFunctionHeader :: GenM ()
-emitFunctionHeader = emitIndent 0 "define i32 @main() {"
+emitFunctionHeader :: TType -> Ident -> GenM () -- TODO args!
+emitFunctionHeader ty (Ident i) = emitIndent 0 $ "define " ++ show ty ++ " @" ++ i ++ "() {"
 
 emitFunctionEnd :: GenM ()
-emitFunctionEnd = do
-  emitIndent 0 "  ret i32 0"
-  emitIndent 0 "}"
-|-}
+emitFunctionEnd = emitIndent 0 "}"

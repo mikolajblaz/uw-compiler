@@ -12,6 +12,7 @@ import Llvm.Core
 import Llvm.State
 import qualified Llvm.Generator as Generator
 import qualified Llvm.Frontend as Frontend
+import qualified Llvm.Emitter as Emitter
 
 
 runCompiler :: String -> Err String
@@ -26,6 +27,7 @@ processProgram :: Program Pos -> GenM ()
 processProgram (Program _ topDefs) = do
   buildTopEnv topDefs
   Frontend.checkMain
+  Emitter.emitDeclarations
   mapM_ processTopDef topDefs
 
 
@@ -35,7 +37,10 @@ processTopDef (FnDef pos ty ident args block) = do
   startNewFun ty
   processArgs args
   -- TODO set outer env
+  Emitter.emitFunctionHeader (plainType ty) ident
   processBlock Nothing block -- TODO Nothing?
+  Emitter.emitFunctionEnd
+  
   Frontend.checkReturnEnding
 
 -- | Update environment

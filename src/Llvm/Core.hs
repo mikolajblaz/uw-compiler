@@ -19,12 +19,14 @@ type Label = Integer
 -- address type
 -- TODO include type information
 data Addr =
-    AImm Integer              -- Constant
+    AImm Integer TType        -- Constant -- TODO with type?
   | AReg Integer TType        -- Temporary Registers
-  | ALoc UniqueIdent          -- Local variables
-  | AFun Ident                -- Functions
+  | ALoc UniqueIdent TType    -- Local variables
+  | AFun Ident TType          -- Functions (+ return type)
   | ALab Label                -- Block labels -- TODO needed?
-  deriving (Show)
+
+instance Show Addr where    -- TODO needed?
+  show _ = "ADDR"
 
   ------------------------- Identifiers --------------------------------
 
@@ -40,14 +42,17 @@ type IdentEnv = Map.Map Ident EnvVal
 type Instr = String
 
 -- Intermediate instructions (quadruple-code)
-data QInstr =
+data QInstr =   -- TODO
     Store
   | Load
   deriving (Show)
 
 -------------------------- Types -------------------------------------------
 data TType = TInt | TStr | TBool | TVoid | TFun TType [TType]
-  deriving (Show)
+
+instance Show TType where
+  show TInt = "i32"
+  show _ = "TT"
 
 plainType :: Type Pos -> TType
 plainType = undefined -- TODO

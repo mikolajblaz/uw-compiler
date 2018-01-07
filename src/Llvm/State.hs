@@ -58,6 +58,8 @@ incRegCnt (GenSt be oe te out idc) = (regc, GenSt be oe te out idc) -- TODO
   where
     regc = idc
 
+addInstr :: Instr -> GenState -> GenState
+addInstr instr (GenSt be oe te out idc) = GenSt be oe te (instr:out) idc
 -------------------------- Operations on state ----------------------
 
 -- Inside GenM
@@ -139,13 +141,13 @@ insertUniqueNewIdent ident ty addr env = do
 insertTopDef :: TopDef Pos -> IdentEnv -> GenM IdentEnv
 insertTopDef (FnDef pos ty ident args _) topEnv = do
   let funType = Fun pos ty (map getArgType args)
-  insertUniqueNewIdent ident ty (AFun ident) topEnv
+  insertUniqueNewIdent ident ty (AFun ident (plainType ty)) topEnv
 
 
 insertLocalDecl :: Ident -> (Type Pos) -> GenM ()
 insertLocalDecl ident ty = do
   uniqueIdent <- freshIdent ident
-  let identAddr = ALoc uniqueIdent
+  let identAddr = ALoc uniqueIdent $ plainType ty
   blockEnv <- gets blockEnv
   newBlockEnv <- insertUnique ident (ty, uniqueIdent, identAddr) blockEnv
   setNewEnv newBlockEnv

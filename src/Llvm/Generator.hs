@@ -130,7 +130,7 @@ genAlloc = undefined
 -- TODO genExpr -> genRhs
 
 genExpr :: Expr Pos -> GenM Addr
-genExpr _ = return $ AImm 1 -- TODO
+genExpr _ = return $ AImm 1 TInt -- TODO
 
 
 genLhs :: Ident -> GenM Addr
@@ -142,14 +142,14 @@ genLhs ident = do
 ------------------------- Conditions ----------------------------------------
 genCond :: Expr Pos -> Label -> Label -> GenM ()
 genCond expr trueLabel falseLabel = do
-  addr <- genCmp (LTH Nothing) TInt (AImm 0) (AImm 1) -- TODO
+  addr <- genCmp (LTH Nothing) (AImm 0 TInt) (AImm 1 TInt) -- TODO
   genCondJump addr trueLabel falseLabel
 
 
-genCmp :: RelOp Pos -> TType -> Addr -> Addr -> GenM Addr
-genCmp rel ty lAddr rAddr = do
+genCmp :: RelOp Pos -> Addr -> Addr -> GenM Addr
+genCmp rel lAddr rAddr = do
   resAddr <- freshRegister TBool
-  Emitter.emitCmp resAddr rel ty lAddr rAddr
+  Emitter.emitCmp resAddr rel lAddr rAddr
   return resAddr
 
 ------------------------- Jumps ---------------------------------------------
