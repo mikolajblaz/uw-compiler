@@ -37,9 +37,6 @@ initState topEnv = GenSt Map.empty topEnv topEnv [] 0
 
 
 ---------------------------- Helpers --------------------------------------
-getIdentType :: Ident -> GenM (Type Pos)
-getIdentType = undefined
-
 getArgType :: Arg a -> Type a
 getArgType (Arg _ t _) = t
 
@@ -93,6 +90,10 @@ getIdentVal ident = do
         Nothing -> fail $ "No such variable: " ++ show ident
     }
 
+getIdentType :: Ident -> GenM (Type Pos)
+getIdentType ident = do
+  (ty, _, _) <- getIdentVal ident
+  return ty
 ------------------- Operations on identifiers environment -----------------
 
 setNewEnvs :: IdentEnv -> IdentEnv -> GenM ()
@@ -130,14 +131,13 @@ insertTopDef (FnDef pos ty ident args _) topEnv = do
   insertUniqueNewIdent ident ty (FunA ident) topEnv
 
 
-insertLocalDecl :: Ident -> (Type Pos) -> GenM Addr
+insertLocalDecl :: Ident -> (Type Pos) -> GenM ()
 insertLocalDecl ident ty = do
   uniqueIdent <- freshIdent ident
   let identAddr = Loc uniqueIdent
   blockEnv <- gets blockEnv
   newBlockEnv <- insertUnique ident (ty, uniqueIdent, identAddr) blockEnv
   setNewEnv newBlockEnv
-  return identAddr
 
 
 

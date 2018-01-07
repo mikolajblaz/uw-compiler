@@ -29,6 +29,10 @@ genStmt :: Maybe Label -> Stmt Pos -> GenM ()
 genStmt nextL (Empty _) = do
   maybeJump nextL
 
+genStmt nextL (SExp _ expr) = do
+  genExpr expr
+  maybeJump nextL
+
 genStmt nextL (Ass _ ident expr) = do
   rhsAddr <- genExpr expr
   lhsAddr <- genLhs ident
@@ -38,9 +42,21 @@ genStmt nextL (Ass _ ident expr) = do
 
 genStmt nextL (Decl _ ty [Init _ ident expr]) = do
   rhsAddr <- genExpr expr
-  lhsAddr <- insertLocalDecl ident ty
+  -- NOTE: here environment changes
+  insertLocalDecl ident ty
+  lhsAddr <- genLhs ident
   genAss ty lhsAddr rhsAddr
   maybeJump nextL
+
+genStmt nextL (Incr pos ident) =
+  genStmt nextL (Ass pos ident identPlus1)
+    where
+      identPlus1 = EAdd pos (EVar pos ident) (Plus pos) (ELitInt pos 1)
+
+genStmt nextL (Decr pos ident) =
+  genStmt nextL (Ass pos ident identMinus1)
+    where
+      identMinus1 = EAdd pos (EVar pos ident) (Minus pos) (ELitInt pos 1)
 
 genStmt nextL (Cond _ cond thenStmt) = do
   afterLabel <- establishNextLabel nextL
@@ -67,32 +83,39 @@ genStmt nextL (CondElse _ cond thenStmt elseStmt) = do
   setCurrentBlock afterLabel
 
 
+genStmt nextL (While _ cond bodyStmt) = do
+  afterLabel <- establishNextLabel nextL
+  bodyLabel <- freshLabel
+  condLabel <- freshLabel
+
+  genJump condLabel
+
+  -- In Llvm it doesn't matter, but the order is as in an efficient assembler
+  -- First body, then condition
+  setCurrentBlock bodyLabel
+  genStmt (Just condLabel) bodyStmt
+
+  setCurrentBlock condLabel
+  genCond cond bodyLabel afterLabel
+
+  setCurrentBlock afterLabel
 
 
+genStmt _ (Ret _ expr) = do
+  addr <- genExpr expr
+  genRet addr
 
-
-{-
-| Decl a (Type a) [Item a]
-| Ass a Ident (Expr a)
-| Incr a Ident
-| Decr a Ident
-| Ret a (Expr a)
-| VRet a
-| Cond a (Expr a) (Stmt a)
-| CondElse a (Expr a) (Stmt a) (Stmt a)
-| While a (Expr a) (Stmt a)
-| SExp a (Expr a)
--}
+genStmt _ (VRet _) = genVRet
 
 
 -- these shouldn't happen
-genStmt nextL (BStmt pos _) = failPos pos $ "Compiler error"
+genStmt _ (BStmt pos _) = failPos pos $ "Compiler error"
 -- single decl already handled
-genStmt nextL (Decl pos _ _) = failPos pos $ "Compiler error"
+genStmt _ (Decl pos _ _) = failPos pos $ "Compiler error"
 
 
 
--- Specific statements
+-- Assignment
 genAss :: Type Pos -> Addr -> Addr -> GenM ()
 genAss ty lhsAddr rhsAddr = do
   undefined
@@ -104,7 +127,6 @@ genAss ty lhsAddr rhsAddr = do
 maybeJump :: Maybe Label -> GenM ()
 maybeJump Nothing = return ()
 maybeJump (Just nextL) = genJump nextL
--- maybeJump = maybe (return ()) genJump -- TODO check this out
 
 -- Important:
 -- All those (and only those) finish a block
@@ -115,10 +137,10 @@ genJump = undefined
 genCondJump :: Addr -> Label -> Label -> GenM ()
 genCondJump = undefined
 
-genRet :: Expr Pos -> Label -> GenM ()
+genRet :: Addr -> GenM ()
 genRet = undefined
 
-genVRet :: Label -> GenM ()
+genVRet :: GenM ()
 genVRet = undefined
 
 ------------------------- Expressions ---------------------------------------
