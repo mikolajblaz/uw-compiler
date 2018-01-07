@@ -9,7 +9,7 @@ import ErrM
 
 import Llvm.Core
 import Llvm.State
--- import qualified Llvm.Emitter as Emitter
+import qualified Llvm.Emitter as Emitter
 
 
 establishNextLabel :: Maybe Label -> GenM Label
@@ -44,6 +44,7 @@ genStmt nextL (Decl _ ty [Init _ ident expr]) = do
   rhsAddr <- genExpr expr
   -- NOTE: here environment changes
   insertLocalDecl ident ty
+  genAlloc ident ty
   lhsAddr <- genLhs ident
   genAss ty lhsAddr rhsAddr
   maybeJump nextL
@@ -82,7 +83,6 @@ genStmt nextL (CondElse _ cond thenStmt elseStmt) = do
 
   setCurrentBlock afterLabel
 
-
 genStmt nextL (While _ cond bodyStmt) = do
   afterLabel <- establishNextLabel nextL
   bodyLabel <- freshLabel
@@ -117,10 +117,40 @@ genStmt _ (Decl pos _ _) = failPos pos $ "Compiler error"
 
 -- Assignment
 genAss :: Type Pos -> Addr -> Addr -> GenM ()
-genAss ty lhsAddr rhsAddr = do
+genAss ty lhsAddr rhsAddr = do -- TODO emitAss?
   undefined
   -- TODO
 
+genAlloc :: Ident -> Type Pos -> GenM ()
+genAlloc = undefined
+
+
+------------------------- Expressions ---------------------------------------
+
+-- TODO genExpr -> genRhs
+
+genExpr :: Expr Pos -> GenM Addr
+genExpr _ = return $ AImm 1 -- TODO
+
+
+genLhs :: Ident -> GenM Addr
+genLhs ident = do
+  (_, _, addr) <- getIdentVal ident
+  return addr
+
+
+------------------------- Conditions ----------------------------------------
+genCond :: Expr Pos -> Label -> Label -> GenM ()
+genCond expr trueLabel falseLabel = do
+  addr <- genCmp (LTH Nothing) TInt (AImm 0) (AImm 1) -- TODO
+  genCondJump addr trueLabel falseLabel
+
+
+genCmp :: RelOp Pos -> TType -> Addr -> Addr -> GenM Addr
+genCmp rel ty lAddr rAddr = do
+  resAddr <- freshRegister TBool
+  Emitter.emitCmp resAddr rel ty lAddr rAddr
+  return resAddr
 
 ------------------------- Jumps ---------------------------------------------
 
@@ -135,29 +165,13 @@ genJump :: Label -> GenM ()
 genJump = undefined
 
 genCondJump :: Addr -> Label -> Label -> GenM ()
-genCondJump = undefined
+genCondJump flag trueLabel falseLabel = undefined
 
 genRet :: Addr -> GenM ()
 genRet = undefined
 
 genVRet :: GenM ()
 genVRet = undefined
-
-------------------------- Expressions ---------------------------------------
-
--- TODO genExpr -> genRhs
-
-genExpr :: Expr Pos -> GenM Addr
-genExpr = undefined
-
-
-genLhs :: Ident -> GenM Addr
-genLhs ident = undefined
-
-
-------------------------- Conditions ----------------------------------------
-genCond :: Expr Pos -> Label -> Label -> GenM ()
-genCond = undefined
 
 {-|
 ------------ Instructions generation ---------------------

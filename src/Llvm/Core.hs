@@ -10,19 +10,20 @@ import ErrM
 type Pos = Maybe (Int, Int)
 
 -- Simple blocks
--- WARNING: it's very different than Block from Latte
+-- NOTE: it's very different than Block from Latte
 type SBlock = [QInstr]
 
 -- Block labels
 type Label = Integer
 
 -- address type
+-- TODO include type information
 data Addr =
-    Immediate Integer     -- Constant
-  | Reg Integer         -- Registers
-  | Loc UniqueIdent         -- Local variables
-  | FunA Ident           -- Functions
-  | Lab Label           -- Block labels -- TODO needed?
+    AImm Integer              -- Constant
+  | AReg Integer TType        -- Temporary Registers
+  | ALoc UniqueIdent          -- Local variables
+  | AFun Ident                -- Functions
+  | ALab Label                -- Block labels -- TODO needed?
   deriving (Show)
 
   ------------------------- Identifiers --------------------------------
@@ -43,6 +44,13 @@ data QInstr =
     Store
   | Load
   deriving (Show)
+
+-------------------------- Types -------------------------------------------
+data TType = TInt | TStr | TBool | TVoid | TFun TType [TType]
+  deriving (Show)
+
+plainType :: Type Pos -> TType
+plainType = undefined -- TODO
 
 -------------------------- Helpers -----------------------------------------
 failPos :: (Monad m) => Pos -> String -> m c

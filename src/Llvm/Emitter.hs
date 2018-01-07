@@ -9,6 +9,11 @@ import ErrM
 import Llvm.Core
 import Llvm.State
 
+emitCmp :: Addr -> RelOp Pos -> TType -> Addr -> Addr -> GenM ()
+emitCmp resAddr rel ty lAddr rAddr = undefined
+
+emitStore = undefined
+
 {-|
 -- helper functions
 printAddr :: Addr -> String

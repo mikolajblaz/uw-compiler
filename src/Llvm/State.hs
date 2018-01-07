@@ -21,6 +21,7 @@ data GenState = GenSt {
   output :: [String],
   -- counters
   identCnt :: Counter
+  -- regCnt :: Counter
 }
   deriving (Show)
 
@@ -52,11 +53,21 @@ getTypePos typos = case typos of
 incIdentCnt :: GenState -> (Counter, GenState)
 incIdentCnt (GenSt be oe te out idc) = (idc, GenSt be oe te out (idc + 1))
 
+incRegCnt :: GenState -> (Counter, GenState)
+incRegCnt (GenSt be oe te out idc) = (regc, GenSt be oe te out idc) -- TODO
+  where
+    regc = idc
+
 -------------------------- Operations on state ----------------------
 
 -- Inside GenM
 startNewFun :: Type Pos -> GenM ()
 startNewFun = undefined
+
+freshRegister :: TType -> GenM Addr
+freshRegister ty = do
+  regCnt <- state incRegCnt
+  return $ AReg regCnt ty
 
 -- Ident
 freshIdent :: Ident -> GenM UniqueIdent
@@ -128,13 +139,13 @@ insertUniqueNewIdent ident ty addr env = do
 insertTopDef :: TopDef Pos -> IdentEnv -> GenM IdentEnv
 insertTopDef (FnDef pos ty ident args _) topEnv = do
   let funType = Fun pos ty (map getArgType args)
-  insertUniqueNewIdent ident ty (FunA ident) topEnv
+  insertUniqueNewIdent ident ty (AFun ident) topEnv
 
 
 insertLocalDecl :: Ident -> (Type Pos) -> GenM ()
 insertLocalDecl ident ty = do
   uniqueIdent <- freshIdent ident
-  let identAddr = Loc uniqueIdent
+  let identAddr = ALoc uniqueIdent
   blockEnv <- gets blockEnv
   newBlockEnv <- insertUnique ident (ty, uniqueIdent, identAddr) blockEnv
   setNewEnv newBlockEnv
