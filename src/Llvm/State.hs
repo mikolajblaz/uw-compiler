@@ -1,6 +1,6 @@
 module Llvm.State where
 
-import Control.Monad ( foldM )
+import Control.Monad ( foldM, liftM )
 import Control.Monad.Trans.State.Lazy
 import qualified Data.Map as Map
 
@@ -18,17 +18,25 @@ data GenState = GenSt {
   blockEnv :: IdentEnv,
   outerEnv :: IdentEnv,
   topEnv :: IdentEnv,
-  output :: [String],
+
   -- counters
-  identCnt :: Counter
-  -- regCnt :: Counter
-  -- labelCnt :: Counter
+  identCnt :: Counter,
+  regCnt :: Counter,
+  labelCnt :: Counter,
 
   -- Blocks
-  -- output :: [String] -- TODO currentBlockOutput
+  currBlock :: Label,
+  blockBuilder :: [String], -- current block output
+  simpleBlocks :: Map.Map Label SBlock,
+  -- TODO block predecessors?
 
+  currentFun :: Ident,
+  currentFunType :: TType,
+  funBlocks :: Map.Map Ident [Label]
 }
   deriving (Show)
+
+-- GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB
 
 -- | A monad to run compiler in
 type GenM = StateT GenState Err
@@ -37,8 +45,8 @@ emptyEnv :: IdentEnv
 emptyEnv = Map.empty
 
 initState :: IdentEnv -> GenState
-initState topEnv = GenSt Map.empty topEnv topEnv [] 0
--- TODO rethink putting topEnv to outerEnv (it's probably correct)
+initState topEnv = GenSt Map.empty topEnv topEnv 0 0 0 0 [] Map.empty (Ident "") TVoid Map.empty
+-- TODO rethink putting topEnv to outerEnv (it's probably correct though)
 
 
 
@@ -56,28 +64,30 @@ getTypePos typos = case typos of
 
 -- Counters
 incIdentCnt :: GenState -> (Counter, GenState)
-incIdentCnt (GenSt be oe te out idc) = (idc, GenSt be oe te out (idc + 1))
+incIdentCnt (GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB) =
+  (iCnt, GenSt bEnv oEnv tEnv (iCnt + 1) rCnt lCnt cB bB sB fun fty funB)
 
 incRegCnt :: GenState -> (Counter, GenState)
-incRegCnt (GenSt be oe te out idc) = (regc, GenSt be oe te out idc) -- TODO
-  where
-    regc = idc
+incRegCnt (GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB) =
+  (rCnt, GenSt bEnv oEnv tEnv iCnt (rCnt + 1) lCnt cB bB sB fun fty funB)
 
 incLabelCnt :: GenState -> (Counter, GenState)
-incLabelCnt (GenSt be oe te out idc) = (labc, GenSt be oe te out idc) -- TODO
-  where
-    labc = idc
+incLabelCnt (GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB) =
+  (lCnt, GenSt bEnv oEnv tEnv iCnt rCnt (lCnt + 1) cB bB sB fun fty funB)
 
 addInstr :: Instr -> GenState -> GenState
-addInstr instr (GenSt be oe te out idc) = GenSt be oe te (instr:out) idc
+addInstr instr (GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB) =
+  GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB (instr : bB) sB fun fty funB
 
 setBlock :: Label -> GenState -> GenState
-setBlock l = id -- TODO
+setBlock label (GenSt bEnv oEnv tEnv iCnt rCnt lCnt _ bB sB fun fty funB) =
+  GenSt bEnv oEnv tEnv iCnt rCnt lCnt label bB sB fun fty funB
+
+addOutput :: [Instr] -> GenState -> GenState
+addOutput = undefined
 -------------------------- Operations on state ----------------------
 
 -- Inside GenM
-startNewFun :: Type Pos -> GenM ()
-startNewFun ty = return () -- TODO
 
 freshRegister :: TType -> GenM Addr
 freshRegister ty = do
@@ -97,12 +107,6 @@ freshLabel = state incLabelCnt
 setCurrentBlock :: Label -> GenM ()
 setCurrentBlock label = modify (setBlock label)
 
--- TopEnv
-buildTopEnv :: [TopDef Pos] -> GenM ()
-buildTopEnv defs = do
-  topEnv <- foldM (flip insertTopDef) Map.empty defs
-  -- nothing in state yet, so simply call initState
-  put $ initState topEnv
 
 getIdentVal :: Ident -> GenM EnvVal
 getIdentVal ident = do
@@ -123,19 +127,36 @@ getIdentType ident = do
 
 
 finishBlock :: GenM ()
-finishBlock = return () -- TODO
+finishBlock = do
+  GenSt lEnv oEnv tEnv iCnt rCnt lCnt currBlock blockBuilder simpleBlocks currFun fty funBlocks <- get
+  let newBlocks = Map.insert currBlock (reverse blockBuilder) simpleBlocks
+  let (Just funLabels) = Map.lookup currFun funBlocks
+  let newFunBlocks = Map.insert currFun funLabels funBlocks
+  put $ GenSt lEnv oEnv tEnv iCnt rCnt lCnt currBlock [] newBlocks currFun fty newFunBlocks
+
+---------------------------- Functions ------------------------------------
+-- TopEnv
+startNewFun :: Ident -> Type Pos -> GenM ()
+startNewFun ident ty = modify (\(GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB _ _ funB) ->
+    GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB ident (plainType ty) funB)
+
+buildTopEnv :: [TopDef Pos] -> GenM ()
+buildTopEnv defs = do
+  topEnv <- foldM (flip insertTopDef) Map.empty defs
+  -- nothing in state yet, so simply call initState
+  put $ initState topEnv
+
 
 ------------------- Operations on identifiers environment -----------------
 
 setNewEnvs :: IdentEnv -> IdentEnv -> GenM ()
-setNewEnvs blockEnv outerEnv = modify setNew
-  where
-    setNew (GenSt _ _ te out idc) = GenSt blockEnv outerEnv te out idc
+setNewEnvs blockEnv outerEnv = modify (\(GenSt _ _ tEnv iCnt rCnt lCnt cB bB sB fun fty funB) ->
+    GenSt blockEnv outerEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB)
+
 
 setNewEnv :: IdentEnv -> GenM ()
-setNewEnv blockEnv = modify setNew
-  where
-    setNew (GenSt _ oe te out idc) = GenSt blockEnv oe te out idc
+setNewEnv blockEnv = modify (\(GenSt _ oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB) ->
+    GenSt blockEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB)
 
 
 -- Outside GenM
@@ -170,43 +191,3 @@ insertLocalDecl ident ty = do
   newBlockEnv <- insertUnique ident (ty, uniqueIdent, identAddr) blockEnv
   setNewEnv newBlockEnv
   return identAddr
-
-
-
-{-|
-getAddr :: Ident -> GenM Addr
-getAddr ident = do
-  env <- gets env
-  case Map.lookup ident env of
-    Just a -> return a
-    Nothing -> fail $ "Undefined variable " ++ show ident
-
--- return new address and Bool inidicating if it was newly allocated
-getAddrOrAlloc :: Ident -> GenM (Addr, Bool)
-getAddrOrAlloc ident = do
-  env <- gets env
-  case Map.lookup ident env of
-    Just a -> return (a, False)
-    Nothing -> do {
-      a <- freshLocal;
-      St env l r o <- get;
-      put $ St (Map.insert ident a env) l r o;
-      return (a, True)
-    }
-
-freshLocal :: GenM Addr
-freshLocal = liftM Loc $ state incCounter
-  where
-    incCounter (St env l r o) = (l, St env (l + 1) r o)
-
-freshRegister :: GenM Addr
-freshRegister = liftM Reg $ state incCounter
-  where
-    incCounter (St env l r o) = (r, St env l (r + 1) o)
-
-getLocalsCount :: GenM Integer
-getLocalsCount = do
-  locals <- gets locals
-  return $ locals
-
-|-}

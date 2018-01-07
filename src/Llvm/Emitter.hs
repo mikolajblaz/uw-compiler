@@ -90,8 +90,14 @@ emitVRet = emit "ret void"
 -- emitPrintInt :: Addr -> GenM ()
 -- emitPrintInt a = emit $ "call void @printInt(i32 " ++ printAddr a ++ ")"
 
-emitDeclarations :: GenM ()
-emitDeclarations = mapM_ (emitIndent 0) [
+------------------------- Output ---------------------------------------
+
+outputInstr :: [Instr] -> GenM ()
+outputInstr instrs = modify (addOutput instrs)
+
+-- output directly to output
+outputDeclarations :: GenM ()
+outputDeclarations = outputInstr [
     "declare void @printInt(i32)",
     "declare void @printString(" ++ show TStr ++ ")",
     "declare void @error()",
@@ -100,10 +106,24 @@ emitDeclarations = mapM_ (emitIndent 0) [
     ""
   ]
 
-emitFunctionHeader :: TType -> Ident -> GenM () -- TODO args!
-emitFunctionHeader ty (Ident i) = emitIndent 0 $ "define " ++ show ty ++ " @" ++ i ++ "() {"
+outputFunctionHeader :: TType -> Ident -> GenM () -- TODO args!
+outputFunctionHeader ty (Ident i) = outputInstr $ ["define " ++ show ty ++ " @" ++ i ++ "() {"]
 
-emitFunctionEnd :: GenM ()
-emitFunctionEnd = do
-  emitIndent 0 "}"
-  emitIndent 0 ""
+outputFunctionEnd :: GenM ()
+outputFunctionEnd = outputInstr ["}", ""]
+
+
+outputFunction :: GenM () -- TODO
+outputFunction = do
+  currFun <- gets currentFun
+  funBlocks <- gets funBlocks
+  simpleBlocks <- gets simpleBlocks
+  let (Just funLabels) = liftM reverse $ Map.lookup currFun funBlocks
+  mapM_ outputBlock (fromJust . (\l -> Map.lookup l simpleBlocks)) funLabels
+
+outputBlock :: Label -> GenM ()
+outputBlock label = do
+  blocks <- gets simpleBlocks
+  let instrs = fromJust $ Map.lookup label blocks
+  outputInstr $ printAddr label
+  outputInstr instrs

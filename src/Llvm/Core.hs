@@ -11,7 +11,7 @@ type Pos = Maybe (Int, Int)
 
 -- Simple blocks
 -- NOTE: it's very different than Block from Latte
-type SBlock = [QInstr]
+type SBlock = [Instr]
 
 -- Block labels
 type Label = Integer

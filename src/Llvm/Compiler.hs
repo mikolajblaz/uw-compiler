@@ -18,28 +18,30 @@ import qualified Llvm.Emitter as Emitter
 runCompiler :: String -> Err String
 runCompiler input = do
   absProgram <- pProgram $ myLexer input
-  output <- liftM output $ execStateT (processProgram absProgram) (initState emptyEnv)
+  finalState <- execStateT (processProgram absProgram) (initState emptyEnv)
   -- TODO postprocess (concatenate, etc.)
-  return $ unlines $ reverse output
+  -- return $ output finalState
+  return "OK"
 
 
 processProgram :: Program Pos -> GenM ()
 processProgram (Program _ topDefs) = do
   buildTopEnv topDefs
   Frontend.checkMain
-  Emitter.emitDeclarations
+  Emitter.outputDeclarations
   mapM_ processTopDef topDefs
 
 
 
 processTopDef :: TopDef Pos -> GenM ()
 processTopDef (FnDef pos ty ident args block) = do
-  startNewFun ty
-  processArgs args
+  startNewFun ident ty
+  procArgs <- processArgs args
   -- TODO set outer env
-  Emitter.emitFunctionHeader (plainType ty) ident
+  Emitter.outputFunctionHeader (plainType ty) ident
   processBlock Nothing block -- TODO Nothing?
-  Emitter.emitFunctionEnd
+  finishFunction
+  Emitter.outputFunctionEnd
 
   Frontend.checkReturnEnding
 
@@ -151,6 +153,7 @@ genStmt nextL (Cond _ cond thenStmt) = do
   setCurrentBlock thenLabel
   processStmt (Just afterLabel) thenStmt
 
+  -- TODO check if there was a return already
   setCurrentBlock afterLabel
 
 genStmt nextL (CondElse _ cond thenStmt elseStmt) = do
@@ -165,6 +168,7 @@ genStmt nextL (CondElse _ cond thenStmt elseStmt) = do
   setCurrentBlock elseLabel
   processStmt (Just afterLabel) elseStmt
 
+  -- TODO check if there was a return already
   setCurrentBlock afterLabel
 
 genStmt nextL (While _ cond bodyStmt) = do
@@ -182,6 +186,7 @@ genStmt nextL (While _ cond bodyStmt) = do
   setCurrentBlock condLabel
   genCond cond bodyLabel afterLabel
 
+  -- TODO check if there was a return already
   setCurrentBlock afterLabel
 
 
