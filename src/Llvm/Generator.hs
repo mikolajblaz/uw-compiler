@@ -27,27 +27,27 @@ establishNextLabel nextL = maybe freshLabel return nextL
 --      setCurrentBlock l
 genStmt :: Maybe Label -> Stmt Pos -> GenM ()
 genStmt nextL (Empty _) = do
-  maybeJump nextL
+  maybeJmp nextL
 
 genStmt nextL (SExp _ expr) = do
   genExpr expr
-  maybeJump nextL
+  maybeJmp nextL
 
 genStmt nextL (Ass _ ident expr) = do
   rhsAddr <- genExpr expr
   lhsAddr <- genLhs ident
   ty <- getIdentType ident
-  genAss ty lhsAddr rhsAddr
-  maybeJump nextL
+  Emitter.emitStore lhsAddr rhsAddr
+  maybeJmp nextL
 
 genStmt nextL (Decl _ ty [Init _ ident expr]) = do
   rhsAddr <- genExpr expr
   -- NOTE: here environment changes
-  insertLocalDecl ident ty
-  genAlloc ident ty
+  declAddr <- insertLocalDecl ident ty
+  Emitter.emitAlloc declAddr
   lhsAddr <- genLhs ident
-  genAss ty lhsAddr rhsAddr
-  maybeJump nextL
+  Emitter.emitStore lhsAddr rhsAddr
+  maybeJmp nextL
 
 genStmt nextL (Incr pos ident) =
   genStmt nextL (Ass pos ident identPlus1)
@@ -88,7 +88,7 @@ genStmt nextL (While _ cond bodyStmt) = do
   bodyLabel <- freshLabel
   condLabel <- freshLabel
 
-  genJump condLabel
+  genJmp condLabel
 
   -- In Llvm it doesn't matter, but the order is as in an efficient assembler
   -- First body, then condition
@@ -114,17 +114,6 @@ genStmt _ (BStmt pos _) = failPos pos $ "Compiler error"
 genStmt _ (Decl pos _ _) = failPos pos $ "Compiler error"
 
 
-
--- Assignment
-genAss :: Type Pos -> Addr -> Addr -> GenM ()
-genAss ty lhsAddr rhsAddr = do -- TODO emitAss?
-  undefined
-  -- TODO
-
-genAlloc :: Ident -> Type Pos -> GenM ()
-genAlloc = undefined
-
-
 ------------------------- Expressions ---------------------------------------
 
 -- TODO genExpr -> genRhs
@@ -143,7 +132,7 @@ genLhs ident = do
 genCond :: Expr Pos -> Label -> Label -> GenM ()
 genCond expr trueLabel falseLabel = do
   addr <- genCmp (LTH Nothing) (AImm 0 TInt) (AImm 1 TInt) -- TODO
-  genCondJump addr trueLabel falseLabel
+  genCondJmp addr trueLabel falseLabel
 
 
 genCmp :: RelOp Pos -> Addr -> Addr -> GenM Addr
@@ -154,55 +143,34 @@ genCmp rel lAddr rAddr = do
 
 ------------------------- Jumps ---------------------------------------------
 
-maybeJump :: Maybe Label -> GenM ()
-maybeJump Nothing = return ()
-maybeJump (Just nextL) = genJump nextL
+maybeJmp :: Maybe Label -> GenM ()
+maybeJmp Nothing = return ()
+maybeJmp (Just nextL) = genJmp nextL
 
--- Important:
+-- NOTE:
 -- All those (and only those) finish a block
 -- TODO all these must call finishBlock!
-genJump :: Label -> GenM ()
-genJump = undefined
+genJmp :: Label -> GenM ()
+genJmp label = do
+  Emitter.emitJmp (ALab label)
+  finishBlock
 
-genCondJump :: Addr -> Label -> Label -> GenM ()
-genCondJump flag trueLabel falseLabel = undefined
+genCondJmp :: Addr -> Label -> Label -> GenM ()
+genCondJmp flag trueLabel falseLabel = do
+  Emitter.emitBr flag (ALab trueLabel) (ALab falseLabel)
+  finishBlock
 
 genRet :: Addr -> GenM ()
-genRet = undefined
+genRet a = do
+  Emitter.emitRet a
+  finishBlock
 
 genVRet :: GenM ()
-genVRet = undefined
+genVRet = do
+  Emitter.emitVRet
+  finishBlock
 
 {-|
------------- Instructions generation ---------------------
--- Return all generated instructions
-genProgram :: Program -> GenM ()
-genProgram (Prog stmts) = do
-  emitDeclarations
-  genMainFunction stmts
-
-genMainFunction :: [Stmt] -> GenM ()
-genMainFunction stmts = do
-  emitFunctionHeader
-  genStmts stmts
-  emitFunctionEnd
-
------------ Statement compilation --------------------
-genStmts :: [Stmt] -> GenM ()
-genStmts stmts = do
-  mapM_ genStmt stmts
-
-genStmt :: Stmt -> GenM ()
-genStmt (SAss ident exp) = do
-  r <- genExp exp
-  (a, newlyAllocated) <- getAddrOrAlloc ident
-  when newlyAllocated $ emitAlloc a
-  emitStore r a
-
-genStmt (SExp exp) = do
-  r <- genExp exp
-  emitPrintInt r
-
 ----------- Expressions compilation --------------------
 
 -- Return expression address

@@ -22,6 +22,11 @@ data GenState = GenSt {
   -- counters
   identCnt :: Counter
   -- regCnt :: Counter
+  -- labelCnt :: Counter
+
+  -- Blocks
+  -- output :: [String] -- TODO currentBlockOutput
+
 }
   deriving (Show)
 
@@ -58,13 +63,21 @@ incRegCnt (GenSt be oe te out idc) = (regc, GenSt be oe te out idc) -- TODO
   where
     regc = idc
 
+incLabelCnt :: GenState -> (Counter, GenState)
+incLabelCnt (GenSt be oe te out idc) = (labc, GenSt be oe te out idc) -- TODO
+  where
+    labc = idc
+
 addInstr :: Instr -> GenState -> GenState
 addInstr instr (GenSt be oe te out idc) = GenSt be oe te (instr:out) idc
+
+setBlock :: Label -> GenState -> GenState
+setBlock l = id -- TODO
 -------------------------- Operations on state ----------------------
 
 -- Inside GenM
 startNewFun :: Type Pos -> GenM ()
-startNewFun = undefined
+startNewFun ty = return () -- TODO
 
 freshRegister :: TType -> GenM Addr
 freshRegister ty = do
@@ -79,10 +92,10 @@ freshIdent (Ident ident) = do
 
 --  Blocks
 freshLabel :: GenM Label
-freshLabel = undefined
+freshLabel = state incLabelCnt
 
 setCurrentBlock :: Label -> GenM ()
-setCurrentBlock = undefined
+setCurrentBlock label = modify (setBlock label)
 
 -- TopEnv
 buildTopEnv :: [TopDef Pos] -> GenM ()
@@ -107,6 +120,11 @@ getIdentType :: Ident -> GenM (Type Pos)
 getIdentType ident = do
   (ty, _, _) <- getIdentVal ident
   return ty
+
+
+finishBlock :: GenM ()
+finishBlock = fail "XXX" -- TODO
+
 ------------------- Operations on identifiers environment -----------------
 
 setNewEnvs :: IdentEnv -> IdentEnv -> GenM ()
@@ -144,13 +162,14 @@ insertTopDef (FnDef pos ty ident args _) topEnv = do
   insertUniqueNewIdent ident ty (AFun ident (plainType ty)) topEnv
 
 
-insertLocalDecl :: Ident -> (Type Pos) -> GenM ()
+insertLocalDecl :: Ident -> (Type Pos) -> GenM Addr
 insertLocalDecl ident ty = do
   uniqueIdent <- freshIdent ident
   let identAddr = ALoc uniqueIdent $ plainType ty
   blockEnv <- gets blockEnv
   newBlockEnv <- insertUnique ident (ty, uniqueIdent, identAddr) blockEnv
   setNewEnv newBlockEnv
+  return identAddr
 
 
 

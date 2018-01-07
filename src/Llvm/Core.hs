@@ -48,24 +48,35 @@ data QInstr =   -- TODO
   deriving (Show)
 
 -------------------------- Types -------------------------------------------
-data TType = TInt | TStr | TBool | TVoid | TFun TType [TType]
+data TType = TInt | TStr | TBool | TVoid | TFun TType [TType] | TLab
+  deriving (Eq)
 
 instance Show TType where
   show TInt = "i32"
-  show _ = "TT"
+  show TStr = "i64*"
+  show TBool = "i1"
+  show TVoid = "void"
+  show (TFun ty _) = show ty -- TODO ?
+  show TLab = "label"
 
 plainType :: Type Pos -> TType
-plainType = undefined -- TODO
+plainType (Int _) = TInt
+plainType (Str _) = TStr
+plainType (Bool _) = TBool
+plainType (Void _) = TVoid
+plainType (Fun _ ty tys) = TFun (plainType ty) $ map plainType tys
 
 -------------------------- Helpers -----------------------------------------
 failPos :: (Monad m) => Pos -> String -> m c
 failPos (Just (line, pos)) s = fail $ "Error in line " ++ show line ++ ", position " ++ show pos ++ ": " ++ s
 failPos Nothing s = fail $ "Error: " ++ s
 
-defaultInit :: Type Pos -> Expr Pos -- TODO
+defaultInit :: Type Pos -> Expr Pos
 defaultInit (Int pos) = ELitInt pos 0
-defaultInit _ = undefined
-defaultInit (Void _) = undefined  -- this should not happen
+defaultInit (Bool pos) = ELitFalse pos
+defaultInit (Str pos) = EString pos ""
+defaultInit (Void _) = undefined    -- this should not happen
+defaultInit (Fun _ _ _) = undefined -- this should not happen
 
-concatInstrs :: [Instr] -> Instr
+concatInstrs :: [Instr] -> String
 concatInstrs = unlines

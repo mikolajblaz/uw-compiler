@@ -11,21 +11,15 @@ import Llvm.State
 import AbsLatte
 import ErrM
 
-
-updateEnv :: Stmt Pos -> Err (Type Pos)
-updateEnv = undefined
--- sprawdź czy w blockEnv nie ma już tego identyfikatora
--- potem zasłoń
--- jeśli to jest BlockStmt, to mergeEnvs i wystartuj z pustym blockEnv
-
-
 ----------------------- Main function  ---------------------------------------
 checkMain :: GenM ()
 checkMain = do
   topEnv <- gets topEnv
   -- check if main exists and check type
   -- TODO
-  undefined
+  (ty, _, _) <- getIdentVal (Ident "main")
+  checkEqual (Fun Nothing (Int Nothing) []) ty
+  return () -- TODO
 
 
 ----------------------- Type check -------------------------------------------
@@ -34,27 +28,27 @@ forbidVoid (Void pos) = failPos pos $ "Type error, variables cannot have void ty
 forbidVoid _ = return ()
 
 checkTypeStmt :: Stmt Pos -> GenM (Type Pos)
-checkTypeStmt = undefined
+checkTypeStmt _ = return (Int Nothing) -- TODO
 
 checkType :: Expr Pos -> GenM (Type Pos)
-checkType = undefined
+checkType _ = return (Int Nothing) -- TODO
 
 expectType :: Type Pos -> Expr Pos -> GenM ()
 expectType ty exp = do
   expTy <- checkType exp
-  unless (ty == expTy) $ failPos pos $
-      "Type error, got: " ++ show expTy ++ ", expected: " ++ show ty
-    where
-      pos = getPosFromType ty
+  checkEqual ty expTy
 
-getPosFromType :: Type Pos -> Pos
-getPosFromType = undefined
-
+checkEqual :: Type Pos -> Type Pos -> GenM ()
+checkEqual ty expTy =
+  unless ((plainType ty) == (plainType expTy)) $ failPos pos $
+    "Type error, got: " ++ show expTy ++ ", expected: " ++ show ty
+      where
+        pos = getTypePos ty
 
 ------------------------------------------------------------------------------
 -- Returns
 checkReturnEnding :: GenM ()
-checkReturnEnding = undefined
+checkReturnEnding = return () -- TODO
 
 
 

@@ -40,7 +40,7 @@ processTopDef (FnDef pos ty ident args block) = do
   Emitter.emitFunctionHeader (plainType ty) ident
   processBlock Nothing block -- TODO Nothing?
   Emitter.emitFunctionEnd
-  
+
   Frontend.checkReturnEnding
 
 -- | Update environment
@@ -48,7 +48,8 @@ processTopDef (FnDef pos ty ident args block) = do
 -- | Copy values from arguments
 -- | I.e. store i32, i32 %n, i32* %loc_n
 processArgs :: [Arg Pos] -> GenM ()
-processArgs = undefined
+processArgs args = return ()
+  -- TODO
 
 
 
@@ -79,10 +80,6 @@ processStmt nextL stmt@(Decl pos ty [Init pos2 ident expr]) = do
   Frontend.expectType ty expr
   -- NOTE: environment changes inside genStmt call
   Generator.genStmt nextL stmt
-  undefined  -- TODO
-  -- idea:
-  -- tmp_var = expr
-  -- int x = tmp_var --> use assignment>
 
 -- multiple declarations
 processStmt nextL (Decl pos ty items) = do

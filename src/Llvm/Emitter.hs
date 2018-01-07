@@ -14,13 +14,19 @@ printAddr :: Addr -> String
 printAddr (AImm a _) = show a
 printAddr (AReg a _) = "%r" ++ show a
 printAddr (ALoc (UIdent var num) _) = "%loc" ++ show num ++ "_" ++ show var
-printAddr _ = undefined
+printAddr (AFun ident ty) = undefined
+printAddr (ALab label) = "%L" ++ show label
 
 printAddrTyped :: Addr -> String
-printAddrTyped = undefined
+printAddrTyped addr = let (addrName, addrTy) = split addr in
+  show addrTy ++ " " ++ addrName
 
 getAddrType :: Addr -> TType
-getAddrType = undefined
+getAddrType (AImm _ ty) = ty
+getAddrType (AReg _ ty) = ty
+getAddrType (ALoc _ ty) = ty
+getAddrType (AFun _ ty) = ty
+getAddrType (ALab _) = TLab
 
 split :: Addr -> (String, TType)
 split a = (printAddr a, getAddrType a)
@@ -65,8 +71,14 @@ emitCmp :: Addr -> RelOp Pos -> Addr -> Addr -> GenM ()
 emitCmp resAddr rel lAddr rAddr = let (lName, lTy) = split lAddr in
   emit $ printAddr resAddr ++ " = icmp " ++ printRelOp rel ++ " " ++ show lTy ++ lName ++ ", " ++ printAddr rAddr
 
-emitCall :: GenM ()
-emitCall = undefined
+emitJmp :: Addr -> GenM ()
+emitJmp label = emit $ "br " ++ printAddrTyped label
+
+emitBr :: Addr -> Addr -> Addr -> GenM ()
+emitBr flag l1 l2 = emit $ "br " ++ printAddrTyped flag ++ ", " ++ printAddrTyped l1 ++ ", " ++ printAddrTyped l2
+
+emitCall :: Addr -> GenM ()
+emitCall fAddr = emit $ "call" -- TODO
 
 emitRet :: Addr -> GenM ()
 emitRet a = emit $ "ret " ++ printAddrTyped a
