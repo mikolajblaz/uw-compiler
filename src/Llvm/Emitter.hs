@@ -48,7 +48,7 @@ emit = emitIndent 2
 emitIndent :: Int -> Instr -> GenM ()
 emitIndent indent instr = do
   let newIntrs = replicate indent ' ' ++ instr
-  modify $ addInstr instr
+  modify $ addInstr newIntrs
 
 --------- specific emitters, all of them use function emit ------------------
 
@@ -68,8 +68,8 @@ emitBinOp op r a1 a2 = let (regName, ty) = split r in
   emit $ regName ++ " = " ++ op ++ " " ++ show ty ++ " " ++ printAddr a1 ++ ", " ++ printAddr a2
 
 emitCmp :: Addr -> RelOp Pos -> Addr -> Addr -> GenM ()
-emitCmp resAddr rel lAddr rAddr = let (lName, lTy) = split lAddr in
-  emit $ printAddr resAddr ++ " = icmp " ++ printRelOp rel ++ " " ++ show lTy ++ lName ++ ", " ++ printAddr rAddr
+emitCmp resAddr rel lAddr rAddr =
+  emit $ printAddr resAddr ++ " = icmp " ++ printRelOp rel ++ " " ++ printAddrTyped lAddr ++ ", " ++ printAddr rAddr
 
 emitJmp :: Addr -> GenM ()
 emitJmp label = emit $ "br " ++ printAddrTyped label
@@ -96,11 +96,14 @@ emitDeclarations = mapM_ (emitIndent 0) [
     "declare void @printString(" ++ show TStr ++ ")",
     "declare void @error()",
     "declare i32 @readInt()",
-    "declare " ++ show TStr ++ " @readString()"
+    "declare " ++ show TStr ++ " @readString()",
+    ""
   ]
 
 emitFunctionHeader :: TType -> Ident -> GenM () -- TODO args!
 emitFunctionHeader ty (Ident i) = emitIndent 0 $ "define " ++ show ty ++ " @" ++ i ++ "() {"
 
 emitFunctionEnd :: GenM ()
-emitFunctionEnd = emitIndent 0 "}"
+emitFunctionEnd = do
+  emitIndent 0 "}"
+  emitIndent 0 ""

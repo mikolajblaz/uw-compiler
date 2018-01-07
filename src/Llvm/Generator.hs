@@ -1,5 +1,5 @@
-module Llvm.Generator (genStmt) where
-
+module Llvm.Generator where
+{-
 import Control.Monad ( liftM, when )
 
 import AbsLatte
@@ -50,14 +50,12 @@ genStmt nextL (Decl _ ty [Init _ ident expr]) = do
   maybeJmp nextL
 
 genStmt nextL (Incr pos ident) =
-  genStmt nextL (Ass pos ident identPlus1)
-    where
-      identPlus1 = EAdd pos (EVar pos ident) (Plus pos) (ELitInt pos 1)
+  let identPlus1 = EAdd pos (EVar pos ident) (Plus pos) (ELitInt pos 1) in
+    genStmt nextL (Ass pos ident identPlus1)
 
 genStmt nextL (Decr pos ident) =
-  genStmt nextL (Ass pos ident identMinus1)
-    where
-      identMinus1 = EAdd pos (EVar pos ident) (Minus pos) (ELitInt pos 1)
+  let identMinus1 = EAdd pos (EVar pos ident) (Minus pos) (ELitInt pos 1) in
+    genStmt nextL (Ass pos ident identMinus1)
 
 genStmt nextL (Cond _ cond thenStmt) = do
   afterLabel <- establishNextLabel nextL
@@ -65,7 +63,7 @@ genStmt nextL (Cond _ cond thenStmt) = do
   genCond cond thenLabel afterLabel
 
   setCurrentBlock thenLabel
-  genStmt (Just afterLabel) thenStmt
+  processStmt (Just afterLabel) thenStmt
 
   setCurrentBlock afterLabel
 
@@ -76,10 +74,10 @@ genStmt nextL (CondElse _ cond thenStmt elseStmt) = do
   genCond cond thenLabel elseLabel
 
   setCurrentBlock thenLabel
-  genStmt (Just afterLabel) thenStmt
+  processStmt (Just afterLabel) thenStmt
 
   setCurrentBlock elseLabel
-  genStmt (Just afterLabel) elseStmt
+  processStmt (Just afterLabel) elseStmt
 
   setCurrentBlock afterLabel
 
@@ -90,10 +88,10 @@ genStmt nextL (While _ cond bodyStmt) = do
 
   genJmp condLabel
 
-  -- In Llvm it doesn't matter, but the order is as in an efficient assembler
+  -- In Llvm it doesn't matter, but the order is as in an efficient assembler:
   -- First body, then condition
   setCurrentBlock bodyLabel
-  genStmt (Just condLabel) bodyStmt
+  processStmt (Just condLabel) bodyStmt
 
   setCurrentBlock condLabel
   genCond cond bodyLabel afterLabel
@@ -149,7 +147,6 @@ maybeJmp (Just nextL) = genJmp nextL
 
 -- NOTE:
 -- All those (and only those) finish a block
--- TODO all these must call finishBlock!
 genJmp :: Label -> GenM ()
 genJmp label = do
   Emitter.emitJmp (ALab label)
@@ -170,6 +167,7 @@ genVRet = do
   Emitter.emitVRet
   finishBlock
 
+-}
 {-|
 ----------- Expressions compilation --------------------
 

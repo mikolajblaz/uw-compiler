@@ -53,7 +53,7 @@ data TType = TInt | TStr | TBool | TVoid | TFun TType [TType] | TLab
 
 instance Show TType where
   show TInt = "i32"
-  show TStr = "i64*"
+  show TStr = "i8*"
   show TBool = "i1"
   show TVoid = "void"
   show (TFun ty _) = show ty -- TODO ?

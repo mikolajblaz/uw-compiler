@@ -123,7 +123,7 @@ getIdentType ident = do
 
 
 finishBlock :: GenM ()
-finishBlock = fail "XXX" -- TODO
+finishBlock = return () -- TODO
 
 ------------------- Operations on identifiers environment -----------------
 
@@ -159,7 +159,7 @@ insertUniqueNewIdent ident ty addr env = do
 insertTopDef :: TopDef Pos -> IdentEnv -> GenM IdentEnv
 insertTopDef (FnDef pos ty ident args _) topEnv = do
   let funType = Fun pos ty (map getArgType args)
-  insertUniqueNewIdent ident ty (AFun ident (plainType ty)) topEnv
+  insertUniqueNewIdent ident funType (AFun ident (plainType funType)) topEnv
 
 
 insertLocalDecl :: Ident -> (Type Pos) -> GenM Addr
