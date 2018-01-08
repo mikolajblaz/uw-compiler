@@ -32,7 +32,7 @@ data GenState = GenSt {
 
   currentFun :: Ident,
   currentFunType :: TType,
-  funBlocks :: Map.Map Ident [Label]
+  funBlocks :: Map.Map Ident [Label]  --TODO remove
 }
   deriving (Show)
 
@@ -128,16 +128,17 @@ getIdentType ident = do
 
 finishBlock :: GenM ()
 finishBlock = do
-  GenSt lEnv oEnv tEnv iCnt rCnt lCnt currBlock blockBuilder simpleBlocks currFun fty funBlocks <- get
+  GenSt lEnv oEnv tEnv iCnt rCnt lCnt currBlock blockBuilder simpleBlocks cFun fty funB <- get
   let newBlocks = Map.insert currBlock (reverse blockBuilder) simpleBlocks
-  let (Just funLabels) = Map.lookup currFun funBlocks
-  let newFunBlocks = Map.insert currFun funLabels funBlocks
-  put $ GenSt lEnv oEnv tEnv iCnt rCnt lCnt currBlock [] newBlocks currFun fty newFunBlocks
+  put $ GenSt lEnv oEnv tEnv iCnt rCnt lCnt currBlock [] newBlocks cFun fty funB
 
 ---------------------------- Functions ------------------------------------
 -- TopEnv
 startNewFun :: Ident -> Type Pos -> GenM ()
-startNewFun ident ty = modify (\(GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB _ _ funB) ->
+startNewFun ident ty = do
+  GenSt _ _ tEnv iCnt _ _ _ _ _ _ _ _ <- get
+  put $ initState tEnv
+  modify (\(GenSt bEnv oEnv tEnv _ rCnt lCnt cB bB sB _ _ funB) ->
     GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB ident (plainType ty) funB)
 
 buildTopEnv :: [TopDef Pos] -> GenM ()

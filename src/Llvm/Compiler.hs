@@ -2,6 +2,8 @@ module Llvm.Compiler where
 
 import Control.Monad
 import Control.Monad.Trans.State.Lazy
+import qualified Data.Map as Map
+import Data.Maybe
 
 import AbsLatte
 import LexLatte
@@ -18,39 +20,43 @@ import qualified Llvm.Emitter as Emitter
 runCompiler :: String -> Err String
 runCompiler input = do
   absProgram <- pProgram $ myLexer input
-  finalState <- execStateT (processProgram absProgram) (initState emptyEnv)
-  -- TODO postprocess (concatenate, etc.)
-  -- return $ output finalState
-  return "OK"
+  evalStateT (processProgram absProgram) (initState emptyEnv)
 
 
-processProgram :: Program Pos -> GenM ()
+processProgram :: Program Pos -> GenM String
 processProgram (Program _ topDefs) = do
   buildTopEnv topDefs
   Frontend.checkMain
-  Emitter.outputDeclarations
-  mapM_ processTopDef topDefs
+  let decls = Emitter.outputDeclarations
+  funOuts <- mapM processTopDef topDefs
+  return $ unlines $ decls ++ (funOuts >>= id)
 
 
-
-processTopDef :: TopDef Pos -> GenM ()
+-- | Return instructions in proper order
+processTopDef :: TopDef Pos -> GenM [Instr]
 processTopDef (FnDef pos ty ident args block) = do
   startNewFun ident ty
-  procArgs <- processArgs args
+  funArgs <- processArgs args
   -- TODO set outer env
-  Emitter.outputFunctionHeader (plainType ty) ident
+  let funFrame = Emitter.outputFunctionFrame (plainType ty) ident
+
+  entry <- freshLabel
+  setCurrentBlock entry
   processBlock Nothing block -- TODO Nothing?
-  finishFunction
-  Emitter.outputFunctionEnd
+
+  funBody <- finishFunction
 
   Frontend.checkReturnEnding
 
+  return $ funFrame funArgs funBody
+
 -- | Update environment
+-- | Check voids
 -- | Init variables
 -- | Copy values from arguments
 -- | I.e. store i32, i32 %n, i32* %loc_n
-processArgs :: [Arg Pos] -> GenM ()
-processArgs args = return ()
+processArgs :: [Arg Pos] -> GenM String
+processArgs args = return ""
   -- TODO
 
 
@@ -96,6 +102,24 @@ processStmt nextL stmt  = do
   Frontend.checkTypeStmt stmt
   genStmt nextL stmt
 
+
+finishFunction :: GenM [Instr] -- TODO
+finishFunction = do
+  currFun <- gets currentFun
+  funBlocks <- gets funBlocks
+  simpleBlocks <- gets simpleBlocks
+  labelCnt <- gets labelCnt
+  let funLabels = [0 .. labelCnt - 1]
+  funIstrs <- mapM outputBlock funLabels
+  return $ funIstrs >>= id -- flatMap
+
+outputBlock :: Label -> GenM [Instr]
+outputBlock label = do
+  blocks <- gets simpleBlocks
+  let instrs = Map.lookup label blocks
+  case instrs of
+    Nothing -> return [] -- TODO -- gets simpleBlocks >>= fail . (++ show label) . show
+    Just instrs -> return $ (Emitter.printAddr (ALab label) ++ ":") : instrs
 
 ------------------------------ Generator part ----------------------------------
 -- NOTE: There are no Frontend check here
