@@ -31,7 +31,7 @@ data GenState = GenSt {
   -- TODO block predecessors?
 
   currentFun :: Ident,
-  currentFunType :: TType,
+  currentFunRetType :: Type Pos,
   funBlocks :: Map.Map Ident [Label]  --TODO remove
 }
   deriving (Show)
@@ -45,7 +45,7 @@ emptyEnv :: IdentEnv
 emptyEnv = Map.empty
 
 initState :: IdentEnv -> GenState
-initState topEnv = GenSt Map.empty topEnv topEnv 0 0 0 0 [] Map.empty (Ident "") TVoid Map.empty
+initState topEnv = GenSt Map.empty topEnv topEnv 0 0 0 0 [] Map.empty (Ident "") (Void Nothing) Map.empty
 -- TODO rethink putting topEnv to outerEnv (it's probably correct though)
 
 
@@ -139,7 +139,7 @@ startNewFun ident ty = do
   GenSt _ _ tEnv iCnt _ _ _ _ _ _ _ _ <- get
   put $ initState tEnv
   modify (\(GenSt bEnv oEnv tEnv _ rCnt lCnt cB bB sB _ _ funB) ->
-    GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB ident (plainType ty) funB)
+    GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB ident ty funB)
 
 buildTopEnv :: [TopDef Pos] -> GenM ()
 buildTopEnv defs = do
