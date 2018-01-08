@@ -234,9 +234,15 @@ analyzeExpr (EMul pos expr op expr2) = do
 analyzeExpr (EAdd pos expr op expr2) = do
   (newExpr, expTy) <- analyzeExpr expr
   (newExpr2, expTy2) <- analyzeExpr expr2
-  checkEqual (Int Nothing) expTy
-  checkEqual (Int Nothing) expTy2
-  return (EAdd pos newExpr op newExpr2, Int Nothing)
+  case op of
+    Minus _ -> checkEqual (Int Nothing) expTy
+    Plus _ -> case expTy of
+      Int _ -> return ()
+      Str _ -> return ()
+      _ -> failPos pos $ "Expected Int or String, got: " ++ show expTy
+
+  checkEqual expTy expTy2
+  return (EAdd pos newExpr op newExpr2, expTy)
 
 analyzeExpr (ERel pos expr op expr2) = do
   (newExpr, expTy) <- analyzeExpr expr

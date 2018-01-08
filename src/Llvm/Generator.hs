@@ -84,10 +84,6 @@ outputBlock label = do
 
 ------------------------------ Generator part ----------------------------------
 
-establishNextLabel :: Maybe Label -> GenM Label
-establishNextLabel nextL = maybe freshLabel return nextL
-
-
 -- genStmt Invariant #1
 -- when genStmt is called, there is some block started already
 -- (stored in state in currentBlock)
@@ -103,13 +99,12 @@ genStmt (BStmt _ b) = processBlock b
 genStmt (Empty _) = return ()
 
 genStmt (SExp _ expr) = do
-  genExpr expr
+  _ <- genExpr expr
   return ()
 
 genStmt (Ass _ ident expr) = do
   rhsAddr <- genExpr expr
   lhsAddr <- genLhs ident
-  ty <- getIdentType ident
   Emitter.emitStore lhsAddr rhsAddr
 
 genStmt (Cond _ cond thenStmt) = do
@@ -218,13 +213,7 @@ genCmp rel lAddr rAddr = do
   return resAddr
 
 ------------------------- Jumps ---------------------------------------------
-
-maybeJmp :: Maybe Label -> GenM ()
-maybeJmp Nothing = return ()
-maybeJmp (Just nextL) = genJmp nextL
-
--- NOTE:
--- All those (and only those) finish a block
+-- NOTE: all those (and only those) finish a block
 genJmp :: Label -> GenM ()
 genJmp label = do
   Emitter.emitJmp (ALab label)
