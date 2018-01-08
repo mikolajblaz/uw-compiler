@@ -1,6 +1,9 @@
 module Llvm.Generator where
-{-
-import Control.Monad ( liftM, when )
+
+import Control.Monad
+import Control.Monad.Trans.State.Lazy
+import qualified Data.Map as Map
+import Data.Maybe
 
 import AbsLatte
 import LexLatte
@@ -11,6 +14,77 @@ import Llvm.Core
 import Llvm.State
 import qualified Llvm.Emitter as Emitter
 
+
+processProgram :: Program Pos -> GenM String
+processProgram (Program _ topDefs) = do
+  buildTopEnv topDefs
+  let decls = Emitter.outputDeclarations
+  funOuts <- mapM processTopDef topDefs
+  return $ unlines $ decls ++ (funOuts >>= id)
+
+
+-- | Return instructions in proper order
+processTopDef :: TopDef Pos -> GenM [Instr]
+processTopDef (FnDef pos ty ident args block) = do
+  startNewFun ident ty
+  funArgs <- processArgs args
+  -- TODO set outer env
+  let funFrame = Emitter.outputFunctionFrame (plainType ty) ident
+
+  entry <- freshLabel
+  setCurrentBlock entry
+  processBlock Nothing block -- TODO Nothing?
+
+  funBody <- finishFunction
+
+  return $ funFrame funArgs funBody
+
+-- | Update environment
+-- | Check voids
+-- | Init variables
+-- | Copy values from arguments
+-- | I.e. store i32, i32 %n, i32* %loc_n
+processArgs :: [Arg Pos] -> GenM String
+processArgs args = return ""
+  -- TODO
+
+
+
+processBlock :: Maybe Label -> Block Pos -> GenM ()
+processBlock nextL (Block _ []) = do
+  maybeJmp nextL
+processBlock nextL (Block pos stmts) = do
+  oldBlockEnv <- gets blockEnv
+  oldOuterEnv <- gets outerEnv
+  let newOuterEnv = blockToOuterEnv oldBlockEnv oldOuterEnv
+  setNewEnvs emptyEnv newOuterEnv
+  -- Now, process block in an empty block environment
+  mapM_ (genStmt Nothing) (init stmts)
+  genStmt nextL (last stmts)
+  -- Set old environment back, discarding everything that was inside the block
+  setNewEnvs oldBlockEnv oldOuterEnv
+
+
+
+finishFunction :: GenM [Instr] -- TODO
+finishFunction = do
+  currFun <- gets currentFun
+  funBlocks <- gets funBlocks
+  simpleBlocks <- gets simpleBlocks
+  labelCnt <- gets labelCnt
+  let funLabels = [0 .. labelCnt - 1]
+  funIstrs <- mapM outputBlock funLabels
+  return $ funIstrs >>= id -- flatMap
+
+outputBlock :: Label -> GenM [Instr]
+outputBlock label = do
+  blocks <- gets simpleBlocks
+  let instrs = Map.lookup label blocks
+  case instrs of
+    Nothing -> return [] -- TODO -- gets simpleBlocks >>= fail . (++ show label) . show
+    Just instrs -> return $ (Emitter.printAddr (ALab label) ++ ":") : instrs
+
+------------------------------ Generator part ----------------------------------
 
 establishNextLabel :: Maybe Label -> GenM Label
 establishNextLabel nextL = maybe freshLabel return nextL
@@ -26,6 +100,8 @@ establishNextLabel nextL = maybe freshLabel return nextL
 -- will eventually call
 --      setCurrentBlock l
 genStmt :: Maybe Label -> Stmt Pos -> GenM ()
+genStmt nextL (BStmt _ b) = processBlock nextL b
+
 genStmt nextL (Empty _) = do
   maybeJmp nextL
 
@@ -40,31 +116,15 @@ genStmt nextL (Ass _ ident expr) = do
   Emitter.emitStore lhsAddr rhsAddr
   maybeJmp nextL
 
-genStmt nextL (Decl _ ty [Init _ ident expr]) = do
-  rhsAddr <- genExpr expr
-  -- NOTE: here environment changes
-  declAddr <- insertLocalDecl ident ty
-  Emitter.emitAlloc declAddr
-  lhsAddr <- genLhs ident
-  Emitter.emitStore lhsAddr rhsAddr
-  maybeJmp nextL
-
-genStmt nextL (Incr pos ident) =
-  let identPlus1 = EAdd pos (EVar pos ident) (Plus pos) (ELitInt pos 1) in
-    genStmt nextL (Ass pos ident identPlus1)
-
-genStmt nextL (Decr pos ident) =
-  let identMinus1 = EAdd pos (EVar pos ident) (Minus pos) (ELitInt pos 1) in
-    genStmt nextL (Ass pos ident identMinus1)
-
 genStmt nextL (Cond _ cond thenStmt) = do
   afterLabel <- establishNextLabel nextL
   thenLabel <- freshLabel
   genCond cond thenLabel afterLabel
 
   setCurrentBlock thenLabel
-  processStmt (Just afterLabel) thenStmt
+  genStmt (Just afterLabel) thenStmt
 
+  -- TODO check if there was a return already
   setCurrentBlock afterLabel
 
 genStmt nextL (CondElse _ cond thenStmt elseStmt) = do
@@ -74,11 +134,12 @@ genStmt nextL (CondElse _ cond thenStmt elseStmt) = do
   genCond cond thenLabel elseLabel
 
   setCurrentBlock thenLabel
-  processStmt (Just afterLabel) thenStmt
+  genStmt (Just afterLabel) thenStmt
 
   setCurrentBlock elseLabel
-  processStmt (Just afterLabel) elseStmt
+  genStmt (Just afterLabel) elseStmt
 
+  -- TODO check if there was a return already
   setCurrentBlock afterLabel
 
 genStmt nextL (While _ cond bodyStmt) = do
@@ -91,11 +152,12 @@ genStmt nextL (While _ cond bodyStmt) = do
   -- In Llvm it doesn't matter, but the order is as in an efficient assembler:
   -- First body, then condition
   setCurrentBlock bodyLabel
-  processStmt (Just condLabel) bodyStmt
+  genStmt (Just condLabel) bodyStmt
 
   setCurrentBlock condLabel
   genCond cond bodyLabel afterLabel
 
+  -- TODO check if there was a return already
   setCurrentBlock afterLabel
 
 
@@ -105,12 +167,30 @@ genStmt _ (Ret _ expr) = do
 
 genStmt _ (VRet _) = genVRet
 
+-- declarations
+-- process single declaration
+genStmt nextL (Decl pos ty [NoInit pos2 ident]) = do
+  genStmt nextL (Decl pos ty [Init pos2 ident (defaultInit ty)])
 
--- these shouldn't happen
-genStmt _ (BStmt pos _) = failPos pos $ "Compiler error"
--- single decl already handled
-genStmt _ (Decl pos _ _) = failPos pos $ "Compiler error"
+genStmt nextL (Decl _ ty [Init _ ident expr]) = do
+  rhsAddr <- genExpr expr
+  -- NOTE: here environment changes
+  declAddr <- insertLocalDecl ident ty
+  Emitter.emitAlloc declAddr
+  lhsAddr <- genLhs ident
+  Emitter.emitStore lhsAddr rhsAddr
+  maybeJmp nextL
 
+-- multiple declarations
+genStmt nextL (Decl pos ty items) = do
+  let singleDecls = map (\item -> Decl pos ty [item]) items
+  mapM_ (genStmt Nothing) (init singleDecls)
+  genStmt nextL (last singleDecls)
+
+
+-- these shouldn't happen after context analysis
+genStmt _ (Incr pos _) = failPos pos $ "Compiler error"
+genStmt _ (Decr pos _) = failPos pos $ "Compiler error"
 
 ------------------------- Expressions ---------------------------------------
 
@@ -167,7 +247,6 @@ genVRet = do
   Emitter.emitVRet
   finishBlock
 
--}
 {-|
 ----------- Expressions compilation --------------------
 
