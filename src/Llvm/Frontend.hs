@@ -50,7 +50,8 @@ analyzeTopDef (FnDef pos ty ident@(Ident i) args block) = do
 
   (newBlock, endsRet) <- analyzeBlock block
 
-  unless endsRet $ fail $ "Error: no return instruction in function " ++ show i
+  unless (endsRet || (plainType ty == TVoid)) $
+    fail $ "Error: no return instruction in function " ++ show i
 
   return $ FnDef pos ty ident args newBlock
 

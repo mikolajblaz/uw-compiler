@@ -33,7 +33,7 @@ processTopDef (FnDef pos ty ident args block) = do
 
   entry <- freshLabel
   setCurrentBlock entry
-  processBlock Nothing block -- TODO Nothing?
+  processBlock block
 
   funBody <- finishFunction
 
@@ -50,17 +50,15 @@ processArgs args = return ""
 
 
 
-processBlock :: Maybe Label -> Block Pos -> GenM ()
-processBlock nextL (Block _ []) = do
-  maybeJmp nextL
-processBlock nextL (Block pos stmts) = do
+processBlock :: Block Pos -> GenM ()
+processBlock (Block _ []) = return ()
+processBlock (Block pos stmts) = do
   oldBlockEnv <- gets blockEnv
   oldOuterEnv <- gets outerEnv
   let newOuterEnv = blockToOuterEnv oldBlockEnv oldOuterEnv
   setNewEnvs emptyEnv newOuterEnv
   -- Now, process block in an empty block environment
-  mapM_ (genStmt Nothing) (init stmts)
-  genStmt nextL (last stmts)
+  mapM_ genStmt stmts
   -- Set old environment back, discarding everything that was inside the block
   setNewEnvs oldBlockEnv oldOuterEnv
 
@@ -99,51 +97,52 @@ establishNextLabel nextL = maybe freshLabel return nextL
 --      l <- freshLabel
 -- will eventually call
 --      setCurrentBlock l
-genStmt :: Maybe Label -> Stmt Pos -> GenM ()
-genStmt nextL (BStmt _ b) = processBlock nextL b
+genStmt :: Stmt Pos -> GenM ()
+genStmt (BStmt _ b) = processBlock b
 
-genStmt nextL (Empty _) = do
-  maybeJmp nextL
+genStmt (Empty _) = return ()
 
-genStmt nextL (SExp _ expr) = do
+genStmt (SExp _ expr) = do
   genExpr expr
-  maybeJmp nextL
+  return ()
 
-genStmt nextL (Ass _ ident expr) = do
+genStmt (Ass _ ident expr) = do
   rhsAddr <- genExpr expr
   lhsAddr <- genLhs ident
   ty <- getIdentType ident
   Emitter.emitStore lhsAddr rhsAddr
-  maybeJmp nextL
 
-genStmt nextL (Cond _ cond thenStmt) = do
-  afterLabel <- establishNextLabel nextL
+genStmt (Cond _ cond thenStmt) = do
+  afterLabel <- freshLabel
   thenLabel <- freshLabel
   genCond cond thenLabel afterLabel
 
   setCurrentBlock thenLabel
-  genStmt (Just afterLabel) thenStmt
+  genStmt thenStmt
+  genJmp afterLabel
 
-  -- TODO check if there was a return already
+  -- TODO check if there was a return already?
   setCurrentBlock afterLabel
 
-genStmt nextL (CondElse _ cond thenStmt elseStmt) = do
-  afterLabel <- establishNextLabel nextL
+genStmt (CondElse _ cond thenStmt elseStmt) = do
+  afterLabel <- freshLabel
   thenLabel <- freshLabel
   elseLabel <- freshLabel
   genCond cond thenLabel elseLabel
 
   setCurrentBlock thenLabel
-  genStmt (Just afterLabel) thenStmt
+  genStmt thenStmt
+  genJmp afterLabel
 
   setCurrentBlock elseLabel
-  genStmt (Just afterLabel) elseStmt
+  genStmt elseStmt
+  genJmp afterLabel
 
   -- TODO check if there was a return already
   setCurrentBlock afterLabel
 
-genStmt nextL (While _ cond bodyStmt) = do
-  afterLabel <- establishNextLabel nextL
+genStmt (While _ cond bodyStmt) = do
+  afterLabel <- freshLabel
   bodyLabel <- freshLabel
   condLabel <- freshLabel
 
@@ -152,7 +151,8 @@ genStmt nextL (While _ cond bodyStmt) = do
   -- In Llvm it doesn't matter, but the order is as in an efficient assembler:
   -- First body, then condition
   setCurrentBlock bodyLabel
-  genStmt (Just condLabel) bodyStmt
+  genStmt bodyStmt
+  genJmp condLabel
 
   setCurrentBlock condLabel
   genCond cond bodyLabel afterLabel
@@ -161,36 +161,34 @@ genStmt nextL (While _ cond bodyStmt) = do
   setCurrentBlock afterLabel
 
 
-genStmt _ (Ret _ expr) = do
+genStmt (Ret _ expr) = do
   addr <- genExpr expr
   genRet addr
 
-genStmt _ (VRet _) = genVRet
+genStmt (VRet _) = genVRet
 
 -- declarations
 -- process single declaration
-genStmt nextL (Decl pos ty [NoInit pos2 ident]) = do
-  genStmt nextL (Decl pos ty [Init pos2 ident (defaultInit ty)])
+genStmt (Decl pos ty [NoInit pos2 ident]) = do
+  genStmt (Decl pos ty [Init pos2 ident (defaultInit ty)])
 
-genStmt nextL (Decl _ ty [Init _ ident expr]) = do
+genStmt (Decl _ ty [Init _ ident expr]) = do
   rhsAddr <- genExpr expr
   -- NOTE: here environment changes
   declAddr <- insertLocalDecl ident ty
   Emitter.emitAlloc declAddr
   lhsAddr <- genLhs ident
   Emitter.emitStore lhsAddr rhsAddr
-  maybeJmp nextL
 
 -- multiple declarations
-genStmt nextL (Decl pos ty items) = do
+genStmt (Decl pos ty items) = do
   let singleDecls = map (\item -> Decl pos ty [item]) items
-  mapM_ (genStmt Nothing) (init singleDecls)
-  genStmt nextL (last singleDecls)
+  mapM_ genStmt singleDecls
 
 
 -- these shouldn't happen after context analysis
-genStmt _ (Incr pos _) = failPos pos $ "Compiler error"
-genStmt _ (Decr pos _) = failPos pos $ "Compiler error"
+genStmt (Incr pos _) = failPos pos $ "Compiler error"
+genStmt (Decr pos _) = failPos pos $ "Compiler error"
 
 ------------------------- Expressions ---------------------------------------
 
