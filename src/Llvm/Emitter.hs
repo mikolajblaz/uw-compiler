@@ -95,18 +95,6 @@ outputInstr :: [Instr] -> GenM [Instr]
 -- outputInstr instrs = modify (addOutput instrs)
 outputInstr = return
 
--- output directly to output
-outputDeclarations :: [Instr]
-outputDeclarations = [
-    "declare void @printInt(i32)",
-    "declare void @printString(" ++ show TStr ++ ")",
-    "declare void @error()",
-    "declare i32 @readInt()",
-    "declare " ++ show TStr ++ " @readString()",
-    ""
-  ]
-
-
 outputFunctionFrame :: TType -> Ident -> (String -> [Instr] -> [Instr])
 outputFunctionFrame ty (Ident i) args body = header : (body ++ ["}", ""])
   where

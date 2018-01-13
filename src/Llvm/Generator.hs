@@ -13,14 +13,16 @@ import ErrM
 import Llvm.Core
 import Llvm.State
 import qualified Llvm.Emitter as Emitter
+import qualified Llvm.LibraryDecl as Lib
 
 
 processProgram :: Program Pos -> GenM String
 processProgram (Program _ topDefs) = do
-  buildTopEnv topDefs
-  let decls = Emitter.outputDeclarations
+  buildTopEnv (Lib.libraryTopDefs ++ topDefs)
+  let libraryOutput = Lib.printLibraryDeclarations
+  -- NOTE: we don't process libraryTopDefs, we just put it to topEnv
   funOuts <- mapM processTopDef topDefs
-  return $ unlines $ decls ++ (funOuts >>= id)
+  return $ unlines $ libraryOutput ++ (funOuts >>= id)
 
 
 -- | Return instructions in proper order
@@ -195,7 +197,7 @@ genExpr _ = return $ AImm 1 TInt -- TODO
 
 genLhs :: Ident -> GenM Addr
 genLhs ident = do
-  (_, _, addr) <- getIdentVal ident
+  (_, _, addr) <- getIdentVal Nothing ident
   return addr
 
 
@@ -228,11 +230,15 @@ genRet :: Addr -> GenM ()
 genRet a = do
   Emitter.emitRet a
   finishBlock
+  afterLabel <- freshLabel
+  setCurrentBlock afterLabel
 
 genVRet :: GenM ()
 genVRet = do
   Emitter.emitVRet
   finishBlock
+  afterLabel <- freshLabel
+  setCurrentBlock afterLabel
 
 {-|
 ----------- Expressions compilation --------------------

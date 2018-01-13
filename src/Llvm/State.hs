@@ -108,8 +108,8 @@ setCurrentBlock :: Label -> GenM ()
 setCurrentBlock label = modify (setBlock label)
 
 
-getIdentVal :: Ident -> GenM EnvVal
-getIdentVal ident = do
+getIdentVal :: Pos -> Ident -> GenM EnvVal
+getIdentVal pos ident = do
   bEnv <- gets blockEnv
   case Map.lookup ident bEnv of
     Just val -> return val
@@ -117,12 +117,12 @@ getIdentVal ident = do
       oEnv <- gets outerEnv;
       case Map.lookup ident oEnv of
         Just val -> return val
-        Nothing -> fail $ "No such variable: " ++ show ident
+        Nothing -> failPos pos $ "No such variable: " ++ show ident
     }
 
-getIdentType :: Ident -> GenM (Type Pos)
-getIdentType ident = do
-  (ty, _, _) <- getIdentVal ident
+getIdentType :: Pos -> Ident -> GenM (Type Pos)
+getIdentType pos ident = do
+  (ty, _, _) <- getIdentVal pos ident
   return ty
 
 
@@ -163,7 +163,7 @@ setNewEnv blockEnv = modify (\(GenSt _ oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty
 -- Outside GenM
 -- | Insert block environment to outer environment.
 blockToOuterEnv :: IdentEnv -> IdentEnv -> IdentEnv
-blockToOuterEnv blockEnv outerEnv = Map.union outerEnv blockEnv
+blockToOuterEnv blockEnv outerEnv = Map.union blockEnv outerEnv
 
 
 

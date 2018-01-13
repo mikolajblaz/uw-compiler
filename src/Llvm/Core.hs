@@ -59,6 +59,13 @@ instance Show TType where
   show (TFun ty _) = show ty -- TODO ?
   show TLab = "label"
 
+printLatte :: Type Pos -> String
+printLatte (Int _) = "int"
+printLatte (Str _) = "string"
+printLatte (Bool _) = "boolean"
+printLatte (Void _) = "void"
+printLatte (Fun _ ty _) = printLatte ty -- TODO ?
+
 plainType :: Type Pos -> TType
 plainType (Int _) = TInt
 plainType (Str _) = TStr
