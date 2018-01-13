@@ -103,7 +103,7 @@ setCurrentBlock label = modify (setBlock label)
 
 
 getIdentVal :: Pos -> Ident -> GenM EnvVal
-getIdentVal pos ident = do
+getIdentVal pos ident@(Ident i) = do
   bEnv <- gets blockEnv
   case Map.lookup ident bEnv of
     Just val -> return val
@@ -111,7 +111,7 @@ getIdentVal pos ident = do
       oEnv <- gets outerEnv;
       case Map.lookup ident oEnv of
         Just val -> return val
-        Nothing -> failPos pos $ "No such variable: " ++ show ident
+        Nothing -> failPos pos $ "Undeclared variable: " ++ show i
     }
 
 getIdentType :: Pos -> Ident -> GenM (Type Pos)
@@ -170,8 +170,8 @@ blockToOuterEnv blockEnv outerEnv = Map.union blockEnv outerEnv
 
 
 insertUnique :: Ident -> EnvVal -> IdentEnv -> GenM IdentEnv
-insertUnique ident val@(ty, _, _) env = case Map.lookup ident env of
-    Just _ -> failPos (getTypePos ty) $ show ident ++ " already declared"
+insertUnique ident@(Ident i) val@(ty, _, _) env = case Map.lookup ident env of
+    Just _ -> failPos (getTypePos ty) $ "Variable " ++ i ++ " already declared"
     Nothing -> return $ Map.insert ident val env
 
 insertUniqueNewIdent :: Ident -> (Type Pos) -> Addr -> IdentEnv -> GenM IdentEnv

@@ -2,6 +2,7 @@ module Llvm.Frontend (analyzeProgram) where
 
 import Control.Monad ( liftM, unless )
 import Control.Monad.Trans.State.Lazy
+import qualified Data.Map as Map
 
 import Llvm.Core
 import Llvm.State
@@ -13,10 +14,13 @@ import AbsLatte
 -- check if main exists and check type
 checkMain :: GenM ()
 checkMain = do
-  (ty, _, _) <- getIdentVal Nothing (Ident "main")
-  unless ((plainType ty) == (TFun TInt [])) $ failPos (getTypePos ty) $
+  topEnv <- gets topEnv
+  mainType <- case Map.lookup (Ident "main") topEnv of
+    Nothing -> fail $ "Error: No 'main' function defined."
+    Just (ty, _, _) -> return ty
+
+  unless ((plainType mainType) == (TFun TInt [])) $ failPos (getTypePos mainType) $
     "Type error: the 'main' function must have a signature 'int main ()"
-  return ()
 
 
 ----------------------- Type check -------------------------------------------
@@ -25,9 +29,9 @@ forbidVoid (Void pos) = failPos pos $ "Type error: variables cannot have void ty
 forbidVoid _ = return ()
 
 checkEqual :: Pos -> Type Pos -> Type Pos -> GenM ()
-checkEqual pos ty expTy =
+checkEqual pos expTy ty =
   unless ((plainType ty) == (plainType expTy)) $ failPos pos $
-    "Type error, got: " ++ printLatte expTy ++ ", expected: " ++ printLatte ty
+    "Type error, got: " ++ printLatte ty ++ ", expected: " ++ printLatte expTy
 
 
 ------------------------ Analysis --------------------------------------------
@@ -48,7 +52,7 @@ analyzeTopDef (FnDef pos ty ident@(Ident i) args block) = do
   (newBlock, endsRet) <- analyzeBlock block
 
   unless (endsRet || (plainType ty == TVoid)) $
-    fail $ "Error: no return instruction in function " ++ show i ++ ", declared in " ++ printPos pos
+    fail $ "Error: missing return statement in function " ++ show i ++ " (declared in " ++ printPos pos ++ ")"
 
   return $ FnDef pos ty ident args newBlock
 
@@ -97,7 +101,7 @@ analyzeStmt d@(Decl pos ty [NoInit pos2 ident]) = do
 analyzeStmt (Decl pos ty [Init pos2 ident expr]) = do
   forbidVoid ty
   (newExpr, exprTy) <- analyzeExpr expr
-  checkEqual pos ty exprTy
+  checkEqual pos2 ty exprTy
   _ <- insertLocalDecl ident ty
   return (Decl pos ty [Init pos2 ident newExpr], False)
 
@@ -121,7 +125,7 @@ analyzeStmt (SExp pos expr) = do
 analyzeStmt (Ass pos ident expr) = do
   (newExpr, exprTy) <- analyzeExpr expr
   ty <- getIdentType pos ident
-  checkEqual pos ty exprTy
+  checkEqual (getExprPos expr) ty exprTy
   return (Ass pos ident newExpr, False)
 
 analyzeStmt (Incr pos ident) = do
@@ -137,7 +141,7 @@ analyzeStmt (Decr pos ident) = do
   return (Ass pos ident identMinus1, False)
 
 analyzeStmt (Cond pos cond thenStmt) = do
-  newCond <- analyzeCond pos cond
+  newCond <- analyzeCond cond
   (newThen, endsRetThen) <- analyzeStmt thenStmt
   -- TODO check if there was a return already
   return $ case newCond of
@@ -146,7 +150,7 @@ analyzeStmt (Cond pos cond thenStmt) = do
     _ -> (Cond pos newCond newThen, False)
 
 analyzeStmt (CondElse pos cond thenStmt elseStmt) = do
-  newCond <- analyzeCond pos cond
+  newCond <- analyzeCond cond
   (newThen, endsRetThen) <- analyzeStmt thenStmt
   (newElse, endsRetElse) <- analyzeStmt elseStmt
   -- TODO check if there was a return already
@@ -156,7 +160,7 @@ analyzeStmt (CondElse pos cond thenStmt elseStmt) = do
     _ -> (CondElse pos newCond newThen newElse, endsRetThen && endsRetElse)
 
 analyzeStmt (While pos cond bodyStmt) = do
-  newCond <- analyzeCond pos cond
+  newCond <- analyzeCond cond
   (newBody, endsRetBody) <- analyzeStmt bodyStmt
   return $ case newCond of
     ELitTrue _ -> (While pos newCond newBody, endsRetBody)
@@ -175,10 +179,10 @@ analyzeStmt (VRet pos) = do
   return (VRet pos, True)
 
 
-analyzeCond :: Pos -> Expr Pos -> GenM (Expr Pos)
-analyzeCond pos cond = do
+analyzeCond :: Expr Pos -> GenM (Expr Pos)
+analyzeCond cond = do
   (newExpr, exprTy) <- analyzeExpr cond
-  checkEqual pos exprTy (Bool Nothing)
+  checkEqual (getExprPos cond) (Bool Nothing) exprTy
   return newExpr
 
 
@@ -204,9 +208,10 @@ analyzeExpr (EApp pos ident@(Ident i) exprs) = do
 
   (newExprs, exprTys) <- liftM unzip $ mapM analyzeExpr exprs
   unless (length argsTys == length exprTys) $ failPos pos $
-    "Wrong number of arguments to apply to function " ++ show i
+    "Wrong number of arguments to apply to function " ++ show i ++
+      ", got: " ++ show (length exprTys) ++ ", expected: " ++ show (length argsTys) ++ "arguments"
   -- check arguments type equality
-  mapM_ (uncurry (checkEqual pos)) $ zip exprTys argsTys
+  mapM_ (\(eTy, aTy, poss) -> checkEqual poss aTy eTy) $ zip3 exprTys argsTys (map getExprPos exprs)
   return (EApp pos ident newExprs, retTy)
 
 analyzeExpr e@(EString pos _) = do
@@ -214,51 +219,73 @@ analyzeExpr e@(EString pos _) = do
 
 analyzeExpr (Neg pos expr) = do
   (newExpr, exprTy) <- analyzeExpr expr
-  checkEqual pos exprTy (Int Nothing)
+  checkEqual pos (Int Nothing) exprTy
   return (Neg pos newExpr, exprTy)
 
 analyzeExpr (Not pos expr) = do
   (newExpr, exprTy) <- analyzeExpr expr
-  checkEqual pos exprTy (Bool Nothing)
+  checkEqual pos (Bool Nothing) exprTy
   return (Not pos newExpr, exprTy)
 
 analyzeExpr (EMul pos expr op expr2) = do
   (newExpr, exprTy) <- analyzeExpr expr
   (newExpr2, exprTy2) <- analyzeExpr expr2
-  checkEqual pos exprTy (Int Nothing)
-  checkEqual pos exprTy2 (Int Nothing)
+  checkEqual (getExprPos expr) (Int Nothing) exprTy
+  checkEqual (getExprPos expr2) (Int Nothing) exprTy2
   return (EMul pos newExpr op newExpr2, Int pos)
 
 analyzeExpr (EAdd pos expr op expr2) = do
   (newExpr, exprTy) <- analyzeExpr expr
   (newExpr2, exprTy2) <- analyzeExpr expr2
   case op of
-    Minus _ -> checkEqual pos exprTy (Int Nothing)
+    Minus _ -> checkEqual (getExprPos expr) exprTy (Int Nothing)
     Plus _ -> case exprTy of
       Int _ -> return ()
       Str _ -> return ()
       _ -> failPos pos $ "Expected int or string, got: " ++ printLatte exprTy
 
-  checkEqual pos exprTy exprTy2
+  checkEqual (getExprPos expr2) exprTy exprTy2
   return (EAdd pos newExpr op newExpr2, exprTy)
 
 analyzeExpr (ERel pos expr op expr2) = do
   (newExpr, exprTy) <- analyzeExpr expr
   (newExpr2, exprTy2) <- analyzeExpr expr2
-  checkEqual pos exprTy (Int Nothing)
-  checkEqual pos exprTy2 (Int Nothing)
+  -- TODO what about Bool comparison?
+  case op of
+    EQU _ -> return ()
+    NE _ -> return ()
+    _ -> checkEqual (getExprPos expr) (Int Nothing) exprTy
+
+  checkEqual (getExprPos expr2) exprTy exprTy2  -- types must be equal
   return (ERel pos newExpr op newExpr2, Bool pos)
 
 analyzeExpr (EAnd pos expr expr2) = do
   (newExpr, exprTy) <- analyzeExpr expr
   (newExpr2, exprTy2) <- analyzeExpr expr2
-  checkEqual pos exprTy (Bool Nothing)
-  checkEqual pos exprTy2 (Bool Nothing)
+  checkEqual (getExprPos expr) (Bool Nothing) exprTy
+  checkEqual (getExprPos expr2) (Bool Nothing) exprTy2
   return (EAnd pos newExpr newExpr2, Bool pos)
 
 analyzeExpr (EOr pos expr expr2) = do
   (newExpr, exprTy) <- analyzeExpr expr
   (newExpr2, exprTy2) <- analyzeExpr expr2
-  checkEqual pos exprTy (Bool Nothing)
-  checkEqual pos exprTy2 (Bool Nothing)
+  checkEqual (getExprPos expr) (Bool Nothing) exprTy
+  checkEqual (getExprPos expr2) (Bool Nothing) exprTy2
   return (EOr pos newExpr newExpr2, Bool pos)
+
+
+-- Helper
+getExprPos :: Expr Pos -> Pos
+getExprPos (EVar pos _) = pos
+getExprPos (ELitInt pos _) = pos
+getExprPos (ELitTrue pos) = pos
+getExprPos (ELitFalse pos) = pos
+getExprPos (EApp pos _ _) = pos
+getExprPos (EString pos _) = pos
+getExprPos (Neg pos _) = pos
+getExprPos (Not pos _) = pos
+getExprPos (EMul pos _ _ _) = pos
+getExprPos (EAdd pos _ _ _) = pos
+getExprPos (ERel pos _ _ _) = pos
+getExprPos (EAnd pos _ _) = pos
+getExprPos (EOr pos _ _) = pos
