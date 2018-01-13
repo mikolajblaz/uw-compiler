@@ -20,5 +20,5 @@ import qualified Llvm.Emitter as Emitter
 runCompiler :: String -> Err String
 runCompiler input = do
   absProgram <- pProgram $ myLexer input
-  newAbsProgram <- evalStateT (Frontend.analyzeProgram absProgram) (initState emptyEnv)
-  evalStateT (Generator.processProgram newAbsProgram) (initState emptyEnv)
+  newAbsProgram <- evalStateT (Frontend.analyzeProgram absProgram) initState
+  evalStateT (Generator.processProgram newAbsProgram) initState

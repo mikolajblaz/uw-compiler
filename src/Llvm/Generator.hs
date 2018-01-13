@@ -1,14 +1,9 @@
 module Llvm.Generator where
 
-import Control.Monad
 import Control.Monad.Trans.State.Lazy
 import qualified Data.Map as Map
-import Data.Maybe
 
 import AbsLatte
-import LexLatte
-import ParLatte
-import ErrM
 
 import Llvm.Core
 import Llvm.State
@@ -22,45 +17,57 @@ processProgram (Program _ topDefs) = do
   let libraryOutput = Lib.printLibraryDeclarations
   -- NOTE: we don't process libraryTopDefs, we just put it to topEnv
   funOuts <- mapM processTopDef topDefs
-  return $ unlines $ libraryOutput ++ (funOuts >>= id)
+  return $ unlines $ libraryOutput ++ (concat funOuts)
 
 
 -- | Return instructions in proper order
 processTopDef :: TopDef Pos -> GenM [Instr]
-processTopDef (FnDef pos ty ident args block) = do
+processTopDef (FnDef _ ty ident args block) = do
   startNewFun ident ty
-  funArgs <- processArgs args
-  -- TODO set outer env
-  let funFrame = Emitter.outputFunctionFrame (plainType ty) ident
+  -- outer env is now set
 
+  -- from now, everything is emitted directly to state
   entry <- freshLabel
   setCurrentBlock entry
+  argsAddrs <- processArgs args
   processBlock block
 
+  -- by calling finishFunction, we gather emitted instructions from the state
   funBody <- finishFunction
 
-  return $ funFrame funArgs funBody
+  let funOut = Emitter.outputFunction (plainType ty) ident argsAddrs funBody
+  return funOut
+
+processArgs :: [Arg Pos] -> GenM [Addr]
+processArgs [] = return []
+processArgs args = do
+  Emitter.emitComment "copy argument values:"
+  argAddrs <- mapM processArg args
+  Emitter.emitEmptyLine  -- TODO remove? from emitter too?
+  return argAddrs
 
 -- | Update environment
--- | Check voids
--- | Init variables
--- | Copy values from arguments
--- | I.e. store i32, i32 %n, i32* %loc_n
-processArgs :: [Arg Pos] -> GenM String
-processArgs args = return ""
-  -- TODO
+-- | Copy value from function argument
+-- | I.e. store i32, i32 %arg_n, i32* %loc_n
+processArg :: Arg Pos -> GenM Addr
+processArg (Arg _ ty ident) = do
+  locAddr@(ALoc ui ty) <- insertLocalDecl ident ty
+  Emitter.emitAlloc locAddr
 
+  let argAddr = AArg ui ty
+  Emitter.emitStore argAddr locAddr
+  return argAddr
 
 
 processBlock :: Block Pos -> GenM ()
 processBlock (Block _ []) = return ()
-processBlock (Block pos stmts) = do
+processBlock (Block _ stmts) = do
   oldBlockEnv <- gets blockEnv
   oldOuterEnv <- gets outerEnv
   let newOuterEnv = blockToOuterEnv oldBlockEnv oldOuterEnv
   setNewEnvs emptyEnv newOuterEnv
   -- Now, process block in an empty block environment
-  mapM_ genStmt stmts
+  mapM_ genStmtCommentWrapper stmts
   -- Set old environment back, discarding everything that was inside the block
   setNewEnvs oldBlockEnv oldOuterEnv
 
@@ -68,13 +75,10 @@ processBlock (Block pos stmts) = do
 
 finishFunction :: GenM [Instr] -- TODO
 finishFunction = do
-  currFun <- gets currentFun
-  funBlocks <- gets funBlocks
-  simpleBlocks <- gets simpleBlocks
   labelCnt <- gets labelCnt
   let funLabels = [0 .. labelCnt - 1]
   funIstrs <- mapM outputBlock funLabels
-  return $ funIstrs >>= id -- flatMap
+  return $ concat funIstrs
 
 outputBlock :: Label -> GenM [Instr]
 outputBlock label = do
@@ -82,9 +86,15 @@ outputBlock label = do
   let instrs = Map.lookup label blocks
   case instrs of
     Nothing -> return [] -- TODO -- gets simpleBlocks >>= fail . (++ show label) . show
-    Just instrs -> return $ (Emitter.printAddr (ALab label) ++ ":") : instrs
+    Just instrs -> return $ (Emitter.printLabelName label ++ ":") : instrs
 
 ------------------------------ Generator part ----------------------------------
+
+genStmtCommentWrapper :: Stmt Pos -> GenM ()
+genStmtCommentWrapper b@(BStmt _ _) = genStmt b
+genStmtCommentWrapper stmt = do
+  Emitter.emitCommentStmt stmt
+  genStmt stmt
 
 -- genStmt Invariant #1
 -- when genStmt is called, there is some block started already
@@ -107,11 +117,11 @@ genStmt (SExp _ expr) = do
 genStmt (Ass _ ident expr) = do
   rhsAddr <- genExpr expr
   lhsAddr <- genLhs ident
-  Emitter.emitStore lhsAddr rhsAddr
+  Emitter.emitStore rhsAddr lhsAddr
 
 genStmt (Cond _ cond thenStmt) = do
-  afterLabel <- freshLabel
   thenLabel <- freshLabel
+  afterLabel <- freshLabel
   genCond cond thenLabel afterLabel
 
   setCurrentBlock thenLabel
@@ -122,9 +132,9 @@ genStmt (Cond _ cond thenStmt) = do
   setCurrentBlock afterLabel
 
 genStmt (CondElse _ cond thenStmt elseStmt) = do
-  afterLabel <- freshLabel
   thenLabel <- freshLabel
   elseLabel <- freshLabel
+  afterLabel <- freshLabel
   genCond cond thenLabel elseLabel
 
   setCurrentBlock thenLabel
@@ -139,9 +149,9 @@ genStmt (CondElse _ cond thenStmt elseStmt) = do
   setCurrentBlock afterLabel
 
 genStmt (While _ cond bodyStmt) = do
-  afterLabel <- freshLabel
   bodyLabel <- freshLabel
   condLabel <- freshLabel
+  afterLabel <- freshLabel
 
   genJmp condLabel
 
@@ -175,7 +185,7 @@ genStmt (Decl _ ty [Init _ ident expr]) = do
   declAddr <- insertLocalDecl ident ty
   Emitter.emitAlloc declAddr
   lhsAddr <- genLhs ident
-  Emitter.emitStore lhsAddr rhsAddr
+  Emitter.emitStore rhsAddr lhsAddr
 
 -- multiple declarations
 genStmt (Decl pos ty items) = do

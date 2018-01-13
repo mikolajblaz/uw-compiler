@@ -1,38 +1,33 @@
 module Llvm.Frontend (analyzeProgram) where
 
-import Control.Monad ( foldM, liftM, unless )
+import Control.Monad ( liftM, unless )
 import Control.Monad.Trans.State.Lazy
-import qualified Data.Map as Map
-import Data.Maybe
 
 import Llvm.Core
 import Llvm.State
 import qualified Llvm.LibraryDecl as Lib
 
 import AbsLatte
-import ErrM
 
 ----------------------- Main function  ---------------------------------------
 -- check if main exists and check type
 checkMain :: GenM ()
 checkMain = do
   (ty, _, _) <- getIdentVal Nothing (Ident "main")
-  unless ((getTypePos ty) == (TFun TInt [])) $ failPos pos $
+  unless ((plainType ty) == (TFun TInt [])) $ failPos (getTypePos ty) $
     "Type error: the 'main' function must have a signature 'int main ()"
   return ()
 
 
 ----------------------- Type check -------------------------------------------
 forbidVoid :: Type Pos -> GenM ()
-forbidVoid (Void pos) = failPos pos $ "Type error, variables cannot have void type"
+forbidVoid (Void pos) = failPos pos $ "Type error: variables cannot have void type"
 forbidVoid _ = return ()
 
 checkEqual :: Pos -> Type Pos -> Type Pos -> GenM ()
 checkEqual pos ty expTy =
-  unless ((plainType ty) == (plainType expTy)) $
-    gets outerEnv >>= (\oe ->
-    failPos pos $
-    "Type error, got: " ++ printLatte expTy ++ ", expected: " ++ printLatte ty ++ "\n\n" ++ show oe)
+  unless ((plainType ty) == (plainType expTy)) $ failPos pos $
+    "Type error, got: " ++ printLatte expTy ++ ", expected: " ++ printLatte ty
 
 
 ------------------------ Analysis --------------------------------------------
@@ -49,26 +44,25 @@ analyzeTopDef :: TopDef Pos -> GenM (TopDef Pos)
 analyzeTopDef (FnDef pos ty ident@(Ident i) args block) = do
   startNewFun ident ty
   analyzeArgs args
-  -- TODO set outer env
-
+  -- NOTE: now, localEnv is set, it will be merged with outerEnv in the following call:
   (newBlock, endsRet) <- analyzeBlock block
 
   unless (endsRet || (plainType ty == TVoid)) $
-    fail $ "Error: no return instruction in function " ++ show i
+    fail $ "Error: no return instruction in function " ++ show i ++ ", declared in " ++ printPos pos
 
   return $ FnDef pos ty ident args newBlock
 
--- | Update environment
--- | Check voids
--- | Init variables
--- | Copy values from arguments
--- | I.e. store i32, i32 %n, i32* %loc_n
+
 analyzeArgs :: [Arg Pos] -> GenM ()
-analyzeArgs args = return ()
-  -- TODO
+analyzeArgs args = mapM_ analyzeArg args
 
+analyzeArg :: Arg Pos -> GenM ()
+analyzeArg (Arg pos ty ident) = do
+  forbidVoid ty
+  _ <- insertLocalDecl ident ty
+  return ()
 
--- Return possibly change abstract tree and flag inidicating whether
+-- Return possibly changed abstract tree and a flag inidicating whether
 -- block ends with a return
 analyzeBlock :: Block Pos -> GenM (Block Pos, Bool)
 analyzeBlock (Block pos []) = return (Block pos [], False)
@@ -97,14 +91,14 @@ analyzeStmt (BStmt pos b) = do
 -- analyze single declaration
 analyzeStmt d@(Decl pos ty [NoInit pos2 ident]) = do
   forbidVoid ty
-  insertLocalDecl ident ty
+  _ <- insertLocalDecl ident ty
   return (d, False)
 
 analyzeStmt (Decl pos ty [Init pos2 ident expr]) = do
   forbidVoid ty
   (newExpr, exprTy) <- analyzeExpr expr
   checkEqual pos ty exprTy
-  insertLocalDecl ident ty
+  _ <- insertLocalDecl ident ty
   return (Decl pos ty [Init pos2 ident newExpr], False)
 
 -- multiple declarations
@@ -113,7 +107,8 @@ analyzeStmt (Decl pos ty items) = do
   declsList <- mapM analyzeStmt singleDecls
   return $ (Decl pos ty $ map extractInit declsList, False)
     where
-      extractInit (Decl _ _ [init], _) = init
+      extractInit (Decl _ _ [initItem], _) = initItem
+      extractInit _ = undefined -- this should not happen
 
 
 analyzeStmt (Empty pos) = return (Empty pos, False)

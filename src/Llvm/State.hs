@@ -1,6 +1,6 @@
 module Llvm.State where
 
-import Control.Monad ( foldM, liftM )
+import Control.Monad ( foldM )
 import Control.Monad.Trans.State.Lazy
 import qualified Data.Map as Map
 
@@ -44,11 +44,8 @@ type GenM = StateT GenState Err
 emptyEnv :: IdentEnv
 emptyEnv = Map.empty
 
-initState :: IdentEnv -> GenState
-initState topEnv = GenSt Map.empty topEnv topEnv 0 0 0 0 [] Map.empty (Ident "") (Void Nothing) Map.empty
--- TODO rethink putting topEnv to outerEnv (it's probably correct though)
-
-
+initState :: GenState
+initState = GenSt Map.empty Map.empty Map.empty 0 0 0 0 [] Map.empty (Ident "") (Void Nothing) Map.empty
 
 ---------------------------- Helpers --------------------------------------
 getArgType :: Arg a -> Type a
@@ -82,9 +79,6 @@ addInstr instr (GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB) =
 setBlock :: Label -> GenState -> GenState
 setBlock label (GenSt bEnv oEnv tEnv iCnt rCnt lCnt _ bB sB fun fty funB) =
   GenSt bEnv oEnv tEnv iCnt rCnt lCnt label bB sB fun fty funB
-
-addOutput :: [Instr] -> GenState -> GenState
-addOutput = undefined
 -------------------------- Operations on state ----------------------
 
 -- Inside GenM
@@ -137,16 +131,20 @@ finishBlock = do
 startNewFun :: Ident -> Type Pos -> GenM ()
 startNewFun ident ty = do
   GenSt _ _ tEnv iCnt _ _ _ _ _ _ _ _ <- get
-  put $ initState tEnv
+  put $ initState
+  setTopOuterEnv tEnv
   modify (\(GenSt bEnv oEnv tEnv _ rCnt lCnt cB bB sB _ _ funB) ->
     GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB ident ty funB)
 
 buildTopEnv :: [TopDef Pos] -> GenM ()
 buildTopEnv defs = do
   topEnv <- foldM (flip insertTopDef) Map.empty defs
-  -- nothing in state yet, so simply call initState
-  put $ initState topEnv
+  setTopOuterEnv topEnv
 
+insertTopDef :: TopDef Pos -> IdentEnv -> GenM IdentEnv
+insertTopDef (FnDef pos ty ident args _) topEnv = do
+  let funType = Fun pos ty (map getArgType args)
+  insertUniqueNewIdent ident funType (AFun ident (plainType funType)) topEnv
 
 ------------------- Operations on identifiers environment -----------------
 
@@ -158,6 +156,10 @@ setNewEnvs blockEnv outerEnv = modify (\(GenSt _ _ tEnv iCnt rCnt lCnt cB bB sB 
 setNewEnv :: IdentEnv -> GenM ()
 setNewEnv blockEnv = modify (\(GenSt _ oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB) ->
     GenSt blockEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB)
+
+setTopOuterEnv :: IdentEnv -> GenM ()
+setTopOuterEnv tEnv = modify (\(GenSt bEnv _ _ iCnt rCnt lCnt cB bB sB fun fty funB) ->
+    GenSt bEnv tEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB)
 
 
 -- Outside GenM
@@ -176,13 +178,6 @@ insertUniqueNewIdent :: Ident -> (Type Pos) -> Addr -> IdentEnv -> GenM IdentEnv
 insertUniqueNewIdent ident ty addr env = do
   uniqueIdent <- freshIdent ident
   insertUnique ident (ty, uniqueIdent, addr) env
-
-
-insertTopDef :: TopDef Pos -> IdentEnv -> GenM IdentEnv
-insertTopDef (FnDef pos ty ident args _) topEnv = do
-  let funType = Fun pos ty (map getArgType args)
-  insertUniqueNewIdent ident funType (AFun ident (plainType funType)) topEnv
-
 
 insertLocalDecl :: Ident -> (Type Pos) -> GenM Addr
 insertLocalDecl ident ty = do

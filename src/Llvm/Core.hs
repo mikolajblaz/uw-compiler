@@ -1,10 +1,8 @@
 module Llvm.Core where
 
-import Control.Monad
 import qualified Data.Map as Map
 
 import AbsLatte
-import ErrM
 
 --------------------------------- Basic types -------------------------------
 type Pos = Maybe (Int, Int)
@@ -22,6 +20,7 @@ data Addr =
     AImm Integer TType        -- Constant -- TODO with type?
   | AReg Integer TType        -- Temporary Registers
   | ALoc UniqueIdent TType    -- Local variables
+  | AArg UniqueIdent TType    -- Function arguments
   | AFun Ident TType          -- Functions (+ return type)
   | ALab Label                -- Block labels -- TODO needed?
 
@@ -75,8 +74,12 @@ plainType (Fun _ ty tys) = TFun (plainType ty) $ map plainType tys
 
 -------------------------- Helpers -----------------------------------------
 failPos :: (Monad m) => Pos -> String -> m c
-failPos (Just (line, pos)) s = fail $ "Error in line " ++ show line ++ ", position " ++ show pos ++ ": " ++ s
+failPos pos@(Just _) s = fail $ "Error in " ++ printPos pos ++ ": " ++ s
 failPos Nothing s = fail $ "Error: " ++ s
+
+printPos :: Pos -> String
+printPos (Just (line, pos)) = "line " ++ show line ++ ", position " ++ show pos
+printPos Nothing = ""
 
 defaultInit :: Type Pos -> Expr Pos
 defaultInit (Int pos) = ELitInt pos 0

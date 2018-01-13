@@ -1,9 +1,10 @@
 module Llvm.Emitter where
 
 import Control.Monad.Trans.State.Lazy
+import Data.List
 
 import AbsLatte
-import ErrM
+import PrintLatte
 
 import Llvm.Core
 import Llvm.State
@@ -12,9 +13,13 @@ import Llvm.State
 printAddr :: Addr -> String
 printAddr (AImm a _) = show a
 printAddr (AReg a _) = "%r" ++ show a
-printAddr (ALoc (UIdent var num) _) = "%loc" ++ show num ++ "_" ++ show var
-printAddr (AFun ident ty) = undefined
+printAddr (ALoc (UIdent var num) _) = "%loc" ++ show num ++ "_" ++ var
+printAddr (AArg (UIdent var num) _) = "%arg" ++ show num ++ "_" ++ var
+printAddr (AFun (Ident i) _) = "@" ++ i
 printAddr (ALab label) = "%L" ++ show label
+
+printLabelName :: Label -> String
+printLabelName label = "L" ++ show label
 
 printAddrTyped :: Addr -> String
 printAddrTyped addr = let (addrName, addrTy) = split addr in
@@ -24,6 +29,7 @@ getAddrType :: Addr -> TType
 getAddrType (AImm _ ty) = ty
 getAddrType (AReg _ ty) = ty
 getAddrType (ALoc _ ty) = ty
+getAddrType (AArg _ ty) = ty
 getAddrType (AFun _ ty) = ty
 getAddrType (ALab _) = TLab
 
@@ -52,15 +58,16 @@ emitIndent indent instr = do
 --------- specific emitters, all of them use function emit ------------------
 
 emitAlloc :: Addr -> GenM ()
-emitAlloc a = let (regName, ty) = split a in
-  emit $ regName ++ " = alloca " ++ show ty
+emitAlloc a = let (locName, ty) = split a in
+  emit $ locName ++ " = alloca " ++ show ty
 
 emitLoad :: Addr -> Addr -> GenM ()
-emitLoad src dest = let (destReg, destTy) = split dest in
-  emit $ destReg ++ " = load " ++ show destTy ++ ", " ++ printAddrTyped src
+emitLoad src dest = let (destReg, destTy) = split dest; (srcReg, srcTy) = split src;  in
+  emit $ destReg ++ " = load " ++ show destTy ++ ", " ++ show srcTy ++ "* " ++ srcReg
 
 emitStore :: Addr -> Addr -> GenM ()
-emitStore src dest = emit $ "store " ++ printAddrTyped src ++ ", " ++ printAddrTyped dest
+emitStore src dest = let (destReg, destTy) = split dest in
+  emit $ "store " ++ printAddrTyped src ++ ", " ++ show destTy ++ "* " ++ destReg
 
 emitBinOp :: String -> Addr -> Addr -> Addr -> GenM ()
 emitBinOp op r a1 a2 = let (regName, ty) = split r in
@@ -76,8 +83,8 @@ emitJmp label = emit $ "br " ++ printAddrTyped label
 emitBr :: Addr -> Addr -> Addr -> GenM ()
 emitBr flag l1 l2 = emit $ "br " ++ printAddrTyped flag ++ ", " ++ printAddrTyped l1 ++ ", " ++ printAddrTyped l2
 
-emitCall :: Addr -> GenM ()
-emitCall fAddr = emit $ "call" -- TODO
+emitCall :: Addr -> [Addr] -> GenM ()
+emitCall fAddr argAddrs = emit $ "call " ++ printAddrTyped fAddr ++ "(" ++ outputArgs argAddrs ++ ")" -- TODO
 
 emitRet :: Addr -> GenM ()
 emitRet a = emit $ "ret " ++ printAddrTyped a
@@ -85,17 +92,26 @@ emitRet a = emit $ "ret " ++ printAddrTyped a
 emitVRet :: GenM()
 emitVRet = emit "ret void"
 
+emitComment :: String -> GenM ()
+emitComment comm = emit $ "  ; " ++ comm
+
+emitCommentStmt :: (Stmt Pos) -> GenM ()
+emitCommentStmt stmt = emitComment $ oneLiner $ printTree stmt
+  where
+    oneLiner str = [if ch /= '\n' then ch else ' ' | ch <- str]
+
+emitEmptyLine :: GenM ()
+emitEmptyLine = emit $ ""
+
 -- TODO remove
 -- emitPrintInt :: Addr -> GenM ()
 -- emitPrintInt a = emit $ "call void @printInt(i32 " ++ printAddr a ++ ")"
 
 ------------------------- Output ---------------------------------------
-
-outputInstr :: [Instr] -> GenM [Instr]
--- outputInstr instrs = modify (addOutput instrs)
-outputInstr = return
-
-outputFunctionFrame :: TType -> Ident -> (String -> [Instr] -> [Instr])
-outputFunctionFrame ty (Ident i) args body = header : (body ++ ["}", ""])
+outputFunction :: TType -> Ident -> [Addr] -> [Instr] -> [Instr]
+outputFunction ty (Ident i) args body = header : (body ++ ["}", ""])
   where
-    header = "define " ++ show ty ++ " @" ++ i ++ "(" ++ args ++ ") {"
+    header = "define " ++ show ty ++ " @" ++ i ++ "(" ++ outputArgs args ++ ") {"
+
+outputArgs :: [Addr] -> String
+outputArgs args = intercalate ", " (map printAddrTyped args)
