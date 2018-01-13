@@ -1,0 +1,10 @@
+*.hi
+*.o
+*.ll
+
+.gitignore
+src/ParLatte.hs
+src/LexLatte.hs
+lib/runtime.bc
+latc
+latc_llvm
