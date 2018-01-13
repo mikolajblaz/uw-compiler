@@ -17,12 +17,12 @@ type Label = Integer
 -- address type
 -- TODO include type information
 data Addr =
-    AImm Integer TType        -- Constant -- TODO with type?
+    AImm Integer TType        -- Constant
   | AReg Integer TType        -- Temporary Registers
   | ALoc UniqueIdent TType    -- Local variables
   | AArg UniqueIdent TType    -- Function arguments
   | AFun Ident TType          -- Functions (+ return type)
-  | ALab Label                -- Block labels -- TODO needed?
+  | ALab Label                -- Block labels
 
 instance Show Addr where    -- TODO needed?
   show _ = "ADDR"

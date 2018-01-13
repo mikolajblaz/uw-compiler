@@ -1,6 +1,6 @@
 module Llvm.Frontend (analyzeProgram) where
 
-import Control.Monad ( liftM, unless )
+import Control.Monad ( liftM, unless, when )
 import Control.Monad.Trans.State.Lazy
 import qualified Data.Map as Map
 
@@ -27,6 +27,10 @@ checkMain = do
 forbidVoid :: Type Pos -> GenM ()
 forbidVoid (Void pos) = failPos pos $ "Type error: variables cannot have void type"
 forbidVoid _ = return ()
+
+forbidVoidComparison :: Type Pos -> GenM ()
+forbidVoidComparison (Void pos) = failPos pos "Type Error: Cannot compare 'void' type"
+forbidVoidComparison _ = return ()
 
 checkEqual :: Pos -> Type Pos -> Type Pos -> GenM ()
 checkEqual pos expTy ty =
@@ -250,11 +254,10 @@ analyzeExpr (EAdd pos expr op expr2) = do
 analyzeExpr (ERel pos expr op expr2) = do
   (newExpr, exprTy) <- analyzeExpr expr
   (newExpr2, exprTy2) <- analyzeExpr expr2
-  -- TODO what about Bool comparison?
   case op of
-    EQU _ -> return ()
-    NE _ -> return ()
-    _ -> checkEqual (getExprPos expr) (Int Nothing) exprTy
+      EQU _ -> forbidVoidComparison exprTy
+      NE _ -> forbidVoidComparison exprTy
+      _ -> checkEqual (getExprPos expr) (Int Nothing) exprTy
 
   checkEqual (getExprPos expr2) exprTy exprTy2  -- types must be equal
   return (ERel pos newExpr op newExpr2, Bool pos)

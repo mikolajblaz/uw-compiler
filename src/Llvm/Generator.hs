@@ -85,7 +85,7 @@ outputBlock label = do
   blocks <- gets simpleBlocks
   let instrs = Map.lookup label blocks
   case instrs of
-    Nothing -> return [] -- TODO -- gets simpleBlocks >>= fail . (++ show label) . show
+    Nothing -> return []
     Just instrs -> return $ (Emitter.printLabelName label ++ ":") : instrs
 
 ------------------------------ Generator part ----------------------------------
@@ -111,11 +111,11 @@ genStmt (BStmt _ b) = processBlock b
 genStmt (Empty _) = return ()
 
 genStmt (SExp _ expr) = do
-  _ <- genExpr expr
+  _ <- genRhs expr
   return ()
 
 genStmt (Ass _ ident expr) = do
-  rhsAddr <- genExpr expr
+  rhsAddr <- genRhs expr
   lhsAddr <- genLhs ident
   Emitter.emitStore rhsAddr lhsAddr
 
@@ -169,7 +169,7 @@ genStmt (While _ cond bodyStmt) = do
 
 
 genStmt (Ret _ expr) = do
-  addr <- genExpr expr
+  addr <- genRhs expr
   genRet addr
 
 genStmt (VRet _) = genVRet
@@ -180,7 +180,7 @@ genStmt (Decl pos ty [NoInit pos2 ident]) = do
   genStmt (Decl pos ty [Init pos2 ident (defaultInit ty)])
 
 genStmt (Decl _ ty [Init _ ident expr]) = do
-  rhsAddr <- genExpr expr
+  rhsAddr <- genRhs expr
   -- NOTE: here environment changes
   declAddr <- insertLocalDecl ident ty
   Emitter.emitAlloc declAddr
@@ -199,56 +199,42 @@ genStmt (Decr pos _) = failPos pos $ "Compiler error"
 
 ------------------------- Expressions ---------------------------------------
 
--- TODO genExpr -> genRhs
+-- TODO genRhs -> genRhs
 
-genExpr :: Expr Pos -> GenM Addr
-genExpr _ = return $ AImm 1 TInt -- TODO
+genRhs :: Expr Pos -> GenM Addr
+genRhs (EVar pos ident) = do
+  (ty, ui, addr) <- getIdentVal pos ident
+  r <- freshRegister (plainType ty)
+  Emitter.emitLoad addr r
+  return r
 
+genRhs (ELitInt _ int) = return $ AImm int TInt
+genRhs (ELitTrue _) = return $ AImm 1 TBool
+genRhs (ELitFalse _) = return $ AImm 0 TBool
 
-genLhs :: Ident -> GenM Addr
-genLhs ident = do
-  (_, _, addr) <- getIdentVal Nothing ident
-  return addr
+genRhs (EApp _ expr expr2) = return $ AImm 1 TInt -- TODO
+genRhs (EString _ expr) = return $ AImm 7 TStr -- TODO
 
+genRhs (Neg p expr) = genRhs (EAdd p (ELitInt p 0) (Minus p) expr) -- TODO optimize
+-- For 'i1' type, logical not is a negation:
+genRhs (Not p expr) = genRhs (Neg p expr) -- TODO check
 
-------------------------- Conditions ----------------------------------------
-genCond :: Expr Pos -> Label -> Label -> GenM ()
-genCond expr trueLabel falseLabel = do
-  addr <- genCmp (LTH Nothing) (AImm 0 TInt) (AImm 1 TInt) -- TODO
-  genCondJmp addr trueLabel falseLabel
+genRhs (EMul _ expr op expr2) = do
+  addr <- genRhs expr
+  addr2 <- genRhs expr2
+  r <- freshRegister TInt
+  opName <- return $ case op of
+    Times _ -> "mul"
+    Div _ -> "sdiv"
+    Mod _ -> "srem"
+  Emitter.emitBinOp opName r addr addr2
+  return r
 
-
-genCmp :: RelOp Pos -> Addr -> Addr -> GenM Addr
-genCmp rel lAddr rAddr = do
-  resAddr <- freshRegister TBool
-  Emitter.emitCmp resAddr rel lAddr rAddr
-  return resAddr
-
-------------------------- Jumps ---------------------------------------------
--- NOTE: all those (and only those) finish a block
-genJmp :: Label -> GenM ()
-genJmp label = do
-  Emitter.emitJmp (ALab label)
-  finishBlock
-
-genCondJmp :: Addr -> Label -> Label -> GenM ()
-genCondJmp flag trueLabel falseLabel = do
-  Emitter.emitBr flag (ALab trueLabel) (ALab falseLabel)
-  finishBlock
-
-genRet :: Addr -> GenM ()
-genRet a = do
-  Emitter.emitRet a
-  finishBlock
-  afterLabel <- freshLabel
-  setCurrentBlock afterLabel
-
-genVRet :: GenM ()
-genVRet = do
-  Emitter.emitVRet
-  finishBlock
-  afterLabel <- freshLabel
-  setCurrentBlock afterLabel
+-- HEAD
+genRhs (EAdd _ expr op expr2) = return $ AImm 1 TInt -- TODO
+genRhs (ERel _ expr rel expr2) = return $ AImm 1 TInt -- TODO
+genRhs (EAnd _ expr expr2) = return $ AImm 1 TInt -- TODO
+genRhs (EOr _ expr expr2) = return $ AImm 1 TInt -- TODO
 
 {-|
 ----------- Expressions compilation --------------------
@@ -275,3 +261,48 @@ genBinOp op e1 e2 = do
   return r
 
 |-}
+
+genLhs :: Ident -> GenM Addr
+genLhs ident = do
+  (_, _, addr) <- getIdentVal Nothing ident
+  return addr
+
+
+------------------------- Conditions ----------------------------------------
+genCond :: Expr Pos -> Label -> Label -> GenM ()
+genCond expr trueLabel falseLabel = do
+  addr <- genCmp (LTH Nothing) (AImm 0 TInt) (AImm 1 TInt) -- TODO
+  genCondJmp addr trueLabel falseLabel
+
+
+genCmp :: RelOp Pos -> Addr -> Addr -> GenM Addr
+genCmp rel lAddr rAddr = do
+  resAddr <- freshRegister TBool
+  Emitter.emitCmp resAddr rel lAddr rAddr
+  return resAddr
+
+------------------------- Terminators ---------------------------------------
+-- NOTE: all those (and only those) finish a block
+genJmp :: Label -> GenM ()
+genJmp label = do
+  Emitter.emitJmp (ALab label)
+  finishBlock
+
+genCondJmp :: Addr -> Label -> Label -> GenM ()
+genCondJmp flag trueLabel falseLabel = do
+  Emitter.emitBr flag (ALab trueLabel) (ALab falseLabel)
+  finishBlock
+
+genRet :: Addr -> GenM ()
+genRet a = do
+  Emitter.emitRet a
+  finishBlock
+  afterLabel <- freshLabel
+  setCurrentBlock afterLabel
+
+genVRet :: GenM ()
+genVRet = do
+  Emitter.emitVRet
+  finishBlock
+  afterLabel <- freshLabel
+  setCurrentBlock afterLabel
