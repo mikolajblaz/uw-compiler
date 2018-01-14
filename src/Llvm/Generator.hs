@@ -1,5 +1,6 @@
 module Llvm.Generator where
 
+import Control.Monad ( unless )
 import Control.Monad.Trans.State.Lazy
 import qualified Data.Map as Map
 
@@ -61,17 +62,21 @@ processArg (Arg _ ty ident) = do
   return argAddr
 
 
-processBlock :: Block Pos -> GenM ()
-processBlock (Block _ []) = return ()
+processBlock :: Block Pos -> GenM Bool
+processBlock (Block _ []) = return False
 processBlock (Block _ stmts) = do
   oldBlockEnv <- gets blockEnv
   oldOuterEnv <- gets outerEnv
   let newOuterEnv = blockToOuterEnv oldBlockEnv oldOuterEnv
   setNewEnvs emptyEnv newOuterEnv
   -- Now, process block in an empty block environment
-  mapM_ genStmtCommentWrapper stmts
+  endsRets <- mapM genStmtCommentWrapper stmts
   -- Set old environment back, discarding everything that was inside the block
   setNewEnvs oldBlockEnv oldOuterEnv
+
+  -- if any instruction ends with ret, the block ends with ret also
+  let endsRet = or endsRets
+  return endsRet
 
 
 
@@ -91,35 +96,39 @@ outputBlock label = do
     Just instrs -> return $ (Emitter.printLabelName label ++ ":") : instrs
 
 ------------------------------ Generator part ----------------------------------
+-- NOTE:
+-- generator Invariant #1
+-- when any 'gen' function is called, there is some block started already
+-- (stored in state in currentBlock)
 
-genStmtCommentWrapper :: Stmt Pos -> GenM ()
+-- NOTE:
+-- generator Invariant #2
+-- a function calling
+--      l <- freshLabel
+-- will eventually call
+--      setCurrentBlock l
+
+genStmtCommentWrapper :: Stmt Pos -> GenM Bool
 genStmtCommentWrapper b@(BStmt _ _) = genStmt b
 genStmtCommentWrapper stmt = do
   Emitter.emitCommentStmt stmt
   genStmt stmt
 
--- genStmt Invariant #1
--- when genStmt is called, there is some block started already
--- (stored in state in currentBlock)
-
--- genStmt Invariant #2
--- a function calling
---      l <- freshLabel
--- will eventually call
---      setCurrentBlock l
-genStmt :: Stmt Pos -> GenM ()
+-- return a flag indicating presence of a return instruction
+genStmt :: Stmt Pos -> GenM Bool
 genStmt (BStmt _ b) = processBlock b
 
-genStmt (Empty _) = return ()
+genStmt (Empty _) = return False
 
 genStmt (SExp _ expr) = do
   _ <- genRhs expr
-  return ()
+  return False
 
 genStmt (Ass _ ident expr) = do
   rhsAddr <- genRhs expr
   lhsAddr <- genLhs ident
   Emitter.emitStore rhsAddr lhsAddr
+  return False
 
 genStmt (Cond _ cond thenStmt) = do
   thenLabel <- freshLabel
@@ -127,11 +136,11 @@ genStmt (Cond _ cond thenStmt) = do
   genCond cond thenLabel afterLabel
 
   setCurrentBlock thenLabel
-  genStmt thenStmt
-  genJmp afterLabel
+  endsRet <- genStmt thenStmt
+  unless endsRet $ genJmp afterLabel
 
-  -- TODO check if there was a return already?
   setCurrentBlock afterLabel
+  return False
 
 genStmt (CondElse _ cond thenStmt elseStmt) = do
   thenLabel <- freshLabel
@@ -140,15 +149,18 @@ genStmt (CondElse _ cond thenStmt elseStmt) = do
   genCond cond thenLabel elseLabel
 
   setCurrentBlock thenLabel
-  genStmt thenStmt
-  genJmp afterLabel
+  endsRetThen <- genStmt thenStmt
+  unless endsRetThen $ genJmp afterLabel
 
   setCurrentBlock elseLabel
-  genStmt elseStmt
-  genJmp afterLabel
+  endsRetElse <- genStmt elseStmt
+  unless endsRetElse $ genJmp afterLabel
 
-  -- TODO check if there was a return already
-  setCurrentBlock afterLabel
+  let endsRet = endsRetThen && endsRetElse
+  -- this might be an invariant exception, but the function ends anyway
+  -- and there are no statements in function left (thanks to trimming in frontend)
+  unless endsRet $ setCurrentBlock afterLabel
+  return endsRet
 
 genStmt (While _ cond bodyStmt) = do
   bodyLabel <- freshLabel
@@ -160,21 +172,22 @@ genStmt (While _ cond bodyStmt) = do
   -- In Llvm it doesn't matter, but the order is as in an efficient assembler:
   -- First body, then condition
   setCurrentBlock bodyLabel
-  genStmt bodyStmt
-  genJmp condLabel
+  endsRet <- genStmt bodyStmt
+  unless endsRet $ genJmp condLabel
 
   setCurrentBlock condLabel
   genCond cond bodyLabel afterLabel
 
-  -- TODO check if there was a return already
   setCurrentBlock afterLabel
+  return False
 
 
 genStmt (Ret _ expr) = do
   addr <- genRhs expr
   genRet addr
+  return True
 
-genStmt (VRet _) = genVRet
+genStmt (VRet _) = genVRet >> return True
 
 -- declarations
 -- process single declaration
@@ -188,11 +201,13 @@ genStmt (Decl _ ty [Init _ ident expr]) = do
   Emitter.emitAlloc declAddr
   lhsAddr <- genLhs ident
   Emitter.emitStore rhsAddr lhsAddr
+  return False
 
 -- multiple declarations
 genStmt (Decl pos ty items) = do
   let singleDecls = map (\item -> Decl pos ty [item]) items
   mapM_ genStmt singleDecls
+  return False
 
 
 -- these shouldn't happen after context analysis
@@ -200,9 +215,6 @@ genStmt (Incr pos _) = failPos pos $ "Compiler error"
 genStmt (Decr pos _) = failPos pos $ "Compiler error"
 
 ------------------------- Expressions ---------------------------------------
-
--- TODO genRhs -> genRhs
-
 genRhs :: Expr Pos -> GenM Addr
 genRhs (EVar pos ident) = do
   (ty, _, addr) <- getIdentVal pos ident
@@ -349,12 +361,8 @@ genRet :: Addr -> GenM ()
 genRet a = do
   Emitter.emitRet a
   finishBlock
-  afterLabel <- freshLabel
-  setCurrentBlock afterLabel
 
 genVRet :: GenM ()
 genVRet = do
   Emitter.emitVRet
   finishBlock
-  afterLabel <- freshLabel
-  setCurrentBlock afterLabel
