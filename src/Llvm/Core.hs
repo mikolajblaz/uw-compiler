@@ -32,9 +32,9 @@ instance Show Addr where    -- TODO needed?
 printAddr :: Addr -> String
 printAddr (AImm a _) = show a
 printAddr (AReg a _) = "%r" ++ show a
-printAddr (ALoc (UIdent var num) _) = "%loc." ++ show num ++ "." ++ var
-printAddr (AStr (UIdent _ num) _)   = "@str." -- TODO ++ show num
-printAddr (AArg (UIdent var num) _) = "%arg." ++ show num ++ "." ++ var
+printAddr (ALoc (UIdent var num) _) = "%loc." ++ var ++ "." ++ show num
+printAddr (AStr (UIdent _ num) _)   = "@str." ++ show num
+printAddr (AArg (UIdent var num) _) = "%arg." ++ var ++ "." ++ show num
 printAddr (AFun (Ident i) _) = "@" ++ i
 printAddr (ALab label) = "%L" ++ show label
 
@@ -42,7 +42,7 @@ getAddrType :: Addr -> TType
 getAddrType (AImm _ ty) = ty
 getAddrType (AReg _ ty) = ty
 getAddrType (ALoc _ ty) = ty
-getAddrType (AStr _ ty) = ty -- TODO always TStr?
+getAddrType (AStr _ ty) = ty
 getAddrType (AArg _ ty) = ty
 getAddrType (AFun _ ty) = ty
 getAddrType (ALab _) = TLab
@@ -56,6 +56,9 @@ type EnvVal = (Type Pos, UniqueIdent, Addr)
   -- | Identifiers environment
 type IdentEnv = Map.Map Ident EnvVal
 
+data StringConst = SConst String Addr
+  deriving (Show)
+
 -------------------------- Instructions ----------------------------------
 -- Plain text instructions
 type Instr = String
@@ -67,7 +70,7 @@ data QInstr =   -- TODO
   deriving (Show)
 
 -------------------------- Types -------------------------------------------
-data TType = TInt | TStr | TBool | TVoid | TFun TType [TType] | TLab
+data TType = TInt | TStr | TBool | TVoid | TFun TType [TType] | TLab | TStrConst Integer
   deriving (Eq)
 
 instance Show TType where
@@ -77,6 +80,7 @@ instance Show TType where
   show TVoid = "void"
   show (TFun ty _) = show ty -- TODO ?
   show TLab = "label"
+  show (TStrConst len) = "[" ++ show len ++ " x i8]"
 
 printLatte :: Type Pos -> String
 printLatte (Int _) = "int"

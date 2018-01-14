@@ -1,7 +1,9 @@
 module Llvm.Emitter where
 
 import Control.Monad.Trans.State.Lazy
+import Data.Char (ord)
 import Data.List
+import Numeric (showHex)
 
 import AbsLatte
 
@@ -80,6 +82,10 @@ emitPhi r options = let (regName, ty) = split r in emit $
     where
       showOpt (val, label) = show [val, label]
 
+emitConstToString :: Addr -> Addr -> GenM ()
+emitConstToString r sAddr = let (regName, rTy) = split r; (sName, sTy) = split sAddr in
+  emit $ regName ++ " = bitcast " ++ show sTy ++ "* " ++ sName ++ " to " ++ show rTy
+
 emitRet :: Addr -> GenM ()
 emitRet a = emit $ "ret " ++ printAddrTyped a
 
@@ -95,11 +101,7 @@ emitCommentStmt stmt = emitComment $ printTreeOneLine stmt
 emitEmptyLine :: GenM ()
 emitEmptyLine = emit $ ""
 
--- TODO remove
--- emitPrintInt :: Addr -> GenM ()
--- emitPrintInt a = emit $ "call void @printInt(i32 " ++ printAddr a ++ ")"
-
-------------------------- Output ---------------------------------------
+------------------------- Output (no state) ----------------------------------
 outputFunction :: TType -> Ident -> [Addr] -> [Instr] -> [Instr]
 outputFunction ty (Ident i) args body = header : (body ++ ["}", ""])
   where
@@ -107,3 +109,14 @@ outputFunction ty (Ident i) args body = header : (body ++ ["}", ""])
 
 outputArgs :: [Addr] -> String
 outputArgs args = intercalate ", " (map printAddrTyped args)
+
+outputStringConstants :: [StringConst] -> [Instr]
+outputStringConstants sConsts = reverse $ "" : (map showSConst sConsts)
+
+showSConst :: StringConst -> Instr
+showSConst (SConst str addr) = let (strName, ty) = split addr in
+  strName ++ " = private constant " ++ show ty ++ " c\"" ++ showHexString str ++ "\\00\"" ++
+    "  ; original string: " ++ str
+      where
+        showHexString str = concat $ map showHexChar str
+        showHexChar char = '\\' : (showHex (ord char) "")

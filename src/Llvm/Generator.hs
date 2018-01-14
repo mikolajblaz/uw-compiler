@@ -17,7 +17,9 @@ processProgram (Program _ topDefs) = do
   let libraryOutput = Lib.printLibraryDeclarations
   -- NOTE: we don't process libraryTopDefs, we just put it to topEnv
   funOuts <- mapM processTopDef topDefs
-  return $ unlines $ libraryOutput ++ (concat funOuts)
+
+  constants <- gets sConsts >>= (return . Emitter.outputStringConstants)
+  return $ unlines $ libraryOutput ++ constants ++ (concat funOuts)
 
 
 -- | Return instructions in proper order
@@ -226,8 +228,10 @@ genRhs (EApp pos ident exprs) = do
           return r
 
 genRhs (EString _ str) = do
-  -- addr <- insertStringConstant str -- TODO
-  return $ AStr (UIdent "" 0) TStr -- TODO
+  addr <- createStringConstant str
+  r <- freshRegister TStr
+  Emitter.emitConstToString r addr
+  return r
 
 genRhs (Neg p expr) = genBinOp "sub" (ELitInt p 0) expr
 -- logical not is a substraction from True, when operating on 'i1' type
@@ -252,7 +256,7 @@ genRhs (EAdd pos expr (Plus _) expr2) = do
     TInt -> Emitter.emitBinOp "add" r addr addr2
     TStr -> do
               -- TODO check
-              (_, _, funAddr) <- getIdentVal Nothing (Ident "concat")
+              (_, _, funAddr) <- getIdentVal Nothing (Ident "concatStrings")
               Emitter.emitCall r funAddr [addr, addr2]
     _ -> failPos pos $ "Compiler error" -- this shouldn't happen after type check
   return r
@@ -268,6 +272,7 @@ genRhs (ERel pos expr rel expr2) = do
     TStr -> do
               (_, _, funAddr) <- getIdentVal Nothing (Ident "compareStrings")
               Emitter.emitCall r funAddr [addr, addr2]
+              -- TODO negate if necessary
     _ -> failPos pos $ "Compiler error" -- this shouldn't happen after type check
   return r
 
