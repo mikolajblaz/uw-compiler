@@ -1,0 +1,6 @@
+int main() {
+  string s;
+  printString(s);
+  printString(s);
+  string s = s;
+}

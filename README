@@ -40,3 +40,5 @@ wygenerowaniu instrukcji nie jest zmieniana ich kolejność.
 * Instrukcja _SExp_ może być jedynie wywołaniem funkcji
 * Porównanie '==' i '!=' może odbywać się między dowolnymi typami (niefunkcyjnymi)
 * Porównania '<', '>', '<=', '>=' mogą odbywać się tylko między typami _int_ i _boolean_
+* Po instrukcji return mogą występować kolejne instrukcje (nie jest to błąd),
+  jednak takie instrukcje są wykrywane i usuwane na etapie frontendu.

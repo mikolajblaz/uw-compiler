@@ -23,8 +23,7 @@ printLibraryDeclarations = [
     "declare " ++ show TVoid ++ " @error()",
     "declare " ++ show TInt  ++ " @readInt()",
     "declare " ++ show TStr  ++ " @readString()",
-    "",
-    "declare " ++ show TStr  ++ " @concatStrings("  ++ show [TStr, TStr] ++ ")",
-    "declare " ++ show TBool ++ " @compareStrings(" ++ show [TStr, TStr] ++ ")",
+    "declare " ++ show TStr  ++ " @concatStrings("  ++ show TStr ++ ", " ++ show TStr ++ ")",
+    "declare " ++ show TBool ++ " @compareStrings(" ++ show TStr ++ ", " ++ show TStr ++ ")",
     ""
   ]

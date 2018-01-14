@@ -39,7 +39,7 @@ data GenState = GenSt {
 }
   deriving (Show)
 
--- GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB
+-- GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sC
 
 -- | A monad to run compiler in
 type GenM = StateT GenState Err
@@ -201,7 +201,7 @@ createStringConstant str = do
 
 addStringConstant :: StringConst -> GenM ()
 addStringConstant sc = modify (\(GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sConsts) ->
-      GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB (sConsts ++ [sc]))
+      GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB (sc : sConsts))
 
 -- special identifier, cannot be created by a user
 stringIdent :: Ident

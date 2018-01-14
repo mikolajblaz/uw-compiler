@@ -1,6 +1,4 @@
 CC=ghc
-# TODO change to ghc
-
 SRC=$(wildcard src/*.hs) $(wildcard src/Llvm/*.hs)
 LEX=src/ParLatte.hs src/LexLatte.hs
 BINS=latc_llvm
@@ -21,7 +19,7 @@ src/ParLatte.hs: src/ParLatte.y
 src/LexLatte.hs: src/LexLatte.x
 	cd src; alex -g LexLatte.x
 
-lib/runtime.bc:
+lib/runtime.bc: lib/runtime.ll
 	cd lib; llvm-as -o runtime.bc runtime.ll
 
 run: all

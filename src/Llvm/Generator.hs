@@ -217,15 +217,16 @@ genRhs (ELitFalse _) = return $ AImm 0 TBool
 genRhs (EApp pos ident exprs) = do
   addrs <- mapM genRhs exprs
   (_, _, funAddr) <- getIdentVal pos ident
-  let retTy = getAddrType funAddr
-  case retTy of
-    TVoid -> do
-               Emitter.emitVoidCall funAddr addrs
-               return undefined -- it will not be used anyway
-    _ -> do
-          r <- freshRegister retTy
-          Emitter.emitCall r funAddr addrs
-          return r
+  let funTy = getAddrType funAddr
+  case funTy of
+    TFun TVoid _ -> do
+                      Emitter.emitVoidCall funAddr addrs
+                      return undefined -- it will not be used anyway
+    TFun retTy _ -> do
+                      r <- freshRegister retTy
+                      Emitter.emitCall r funAddr addrs
+                      return r
+    _ -> failPos pos $ "Compiler error" -- this shouldn't happen
 
 genRhs (EString _ str) = do
   addr <- createStringConstant str

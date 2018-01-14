@@ -1,0 +1,9 @@
+int main() {
+  f();
+  return 0;
+  int x = 1;
+  x = 3;
+}
+
+void f() {return; g(); return;}
+void g() {printInt(3); return; return;}

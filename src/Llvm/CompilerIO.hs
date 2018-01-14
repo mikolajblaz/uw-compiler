@@ -46,7 +46,7 @@ processArgs args = do
   let llFile = replaceExtension fileName ".ll"
   let bcFile = replaceExtension fileName ".bc"
   writeFile llFile output
-{-|
+
   -- assemble
   -- llvm-as -o in.bc in.ll
   asOutput <- readProcess "llvm-as" ["-o", bcFile, llFile] ""
@@ -56,8 +56,8 @@ processArgs args = do
   -- llvm-link -o in.bc in.bc runtime.bc
   linkOutput <- readProcess "llvm-link" ["-o", bcFile, bcFile, "lib/runtime.bc"] ""
   putStr linkOutput
-|-}
-  putStr output
+
+  -- putStr output -- TODO remove
 
 
 fromErrToIO :: Err a -> IO a

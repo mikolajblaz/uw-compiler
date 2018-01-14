@@ -2,6 +2,8 @@ int main() {
   boolean x = 1 == 3;
   x = f(true < false || false);
   x = f(true && x);
+  printInt(45);
+  f(false || f(true) || f(true));
   return 0;
 }
 

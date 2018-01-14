@@ -1,6 +1,7 @@
 *.hi
 *.o
 *.ll
+*.bc
 
 .gitignore
 src/ParLatte.hs

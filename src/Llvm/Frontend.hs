@@ -87,13 +87,17 @@ analyzeBlock (Block pos stmts) = do
   setNewEnvs emptyEnv newOuterEnv
   -- Now, analyze block in an empty block environment
   (newStmts, endsRets) <- liftM unzip $ mapM analyzeStmt stmts
-  -- if any instruction ecnd with ret, the block ends with ret also
-  let endsRet = or endsRets
-  -- TODO trim instructions after ret
   -- Set old environment back, discarding everything that was inside the block
   setNewEnvs oldBlockEnv oldOuterEnv
-  return $ (Block pos newStmts, endsRet)
 
+  -- trim instructions after ret
+  let (noRets, afterFirstRet) = break id endsRets
+  -- if any instruction ends with ret, the block ends with ret also
+  let endsRet = not $ null afterFirstRet
+  let trimmedStmts = if endsRet
+                       then take (length noRets + 1) newStmts
+                       else newStmts -- no change
+  return $ (Block pos trimmedStmts, endsRet)
 
   -- Return possibly change abstract tree and flag inidicating whether
   -- statment ends with a return
