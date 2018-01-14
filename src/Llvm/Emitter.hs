@@ -4,7 +4,6 @@ import Control.Monad.Trans.State.Lazy
 import Data.List
 
 import AbsLatte
-import PrintLatte
 
 import Llvm.Core
 import Llvm.State
@@ -14,6 +13,7 @@ printAddr :: Addr -> String
 printAddr (AImm a _) = show a
 printAddr (AReg a _) = "%r" ++ show a
 printAddr (ALoc (UIdent var num) _) = "%loc" ++ show num ++ "_" ++ var
+printAddr (AStr (UIdent _ num) _)   = "@str" -- TODO ++ show num
 printAddr (AArg (UIdent var num) _) = "%arg" ++ show num ++ "_" ++ var
 printAddr (AFun (Ident i) _) = "@" ++ i
 printAddr (ALab label) = "%L" ++ show label
@@ -25,24 +25,16 @@ printAddrTyped :: Addr -> String
 printAddrTyped addr = let (addrName, addrTy) = split addr in
   show addrTy ++ " " ++ addrName
 
-getAddrType :: Addr -> TType
-getAddrType (AImm _ ty) = ty
-getAddrType (AReg _ ty) = ty
-getAddrType (ALoc _ ty) = ty
-getAddrType (AArg _ ty) = ty
-getAddrType (AFun _ ty) = ty
-getAddrType (ALab _) = TLab
-
 split :: Addr -> (String, TType)
 split a = (printAddr a, getAddrType a)
 
-printRelOp :: RelOp Pos -> String
-printRelOp (LTH _) = "slt"
-printRelOp (LE _) = "sle"
-printRelOp (GTH _) = "sgt"
-printRelOp (GE _) = "sge"
-printRelOp (EQU _) = "eq"
-printRelOp (NE _) = "ne"
+printRelOp :: RelOp Pos -> Char -> String
+printRelOp (LTH _) sign = sign : "lt"
+printRelOp (LE _) sign  = sign : "le"
+printRelOp (GTH _) sign = sign : "gt"
+printRelOp (GE _) sign  = sign : "ge"
+printRelOp (EQU _) _ = "eq"
+printRelOp (NE _) _  = "ne"
 
 ------------------------------------------------------------
 -- basic function for emitting all instructions
@@ -73,9 +65,9 @@ emitBinOp :: String -> Addr -> Addr -> Addr -> GenM ()
 emitBinOp op r a1 a2 = let (regName, ty) = split r in
   emit $ regName ++ " = " ++ op ++ " " ++ show ty ++ " " ++ printAddr a1 ++ ", " ++ printAddr a2
 
-emitCmp :: Addr -> RelOp Pos -> Addr -> Addr -> GenM ()
-emitCmp resAddr rel lAddr rAddr =
-  emit $ printAddr resAddr ++ " = icmp " ++ printRelOp rel ++ " " ++ printAddrTyped lAddr ++ ", " ++ printAddr rAddr
+emitCmp :: Addr -> RelOp Pos -> Char -> Addr -> Addr -> GenM ()
+emitCmp resAddr rel sign lAddr rAddr =
+  emit $ printAddr resAddr ++ " = icmp " ++ printRelOp rel sign ++ " " ++ printAddrTyped lAddr ++ ", " ++ printAddr rAddr
 
 emitJmp :: Addr -> GenM ()
 emitJmp label = emit $ "br " ++ printAddrTyped label
@@ -83,8 +75,13 @@ emitJmp label = emit $ "br " ++ printAddrTyped label
 emitBr :: Addr -> Addr -> Addr -> GenM ()
 emitBr flag l1 l2 = emit $ "br " ++ printAddrTyped flag ++ ", " ++ printAddrTyped l1 ++ ", " ++ printAddrTyped l2
 
-emitCall :: Addr -> [Addr] -> GenM ()
-emitCall fAddr argAddrs = emit $ "call " ++ printAddrTyped fAddr ++ "(" ++ outputArgs argAddrs ++ ")" -- TODO
+emitCall :: Addr -> Addr -> [Addr] -> GenM ()
+emitCall result fAddr argAddrs = emit $
+  printAddr result ++ " = call " ++ printAddrTyped fAddr ++ "(" ++ outputArgs argAddrs ++ ")" -- TODO
+
+emitVoidCall :: Addr -> [Addr] -> GenM ()
+emitVoidCall fAddr argAddrs = emit $
+  "call " ++ printAddrTyped fAddr ++ "(" ++ outputArgs argAddrs ++ ")" -- TODO
 
 emitRet :: Addr -> GenM ()
 emitRet a = emit $ "ret " ++ printAddrTyped a
@@ -96,9 +93,7 @@ emitComment :: String -> GenM ()
 emitComment comm = emit $ "  ; " ++ comm
 
 emitCommentStmt :: (Stmt Pos) -> GenM ()
-emitCommentStmt stmt = emitComment $ oneLiner $ printTree stmt
-  where
-    oneLiner str = [if ch /= '\n' then ch else ' ' | ch <- str]
+emitCommentStmt stmt = emitComment $ printTreeOneLine stmt
 
 emitEmptyLine :: GenM ()
 emitEmptyLine = emit $ ""

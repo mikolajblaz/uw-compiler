@@ -8,7 +8,7 @@ import AbsLatte
 import Llvm.Core
 import Llvm.State
 import qualified Llvm.Emitter as Emitter
-import qualified Llvm.LibraryDecl as Lib
+import qualified Llvm.StdLib as Lib
 
 
 processProgram :: Program Pos -> GenM String
@@ -203,7 +203,7 @@ genStmt (Decr pos _) = failPos pos $ "Compiler error"
 
 genRhs :: Expr Pos -> GenM Addr
 genRhs (EVar pos ident) = do
-  (ty, ui, addr) <- getIdentVal pos ident
+  (ty, _, addr) <- getIdentVal pos ident
   r <- freshRegister (plainType ty)
   Emitter.emitLoad addr r
   return r
@@ -212,55 +212,76 @@ genRhs (ELitInt _ int) = return $ AImm int TInt
 genRhs (ELitTrue _) = return $ AImm 1 TBool
 genRhs (ELitFalse _) = return $ AImm 0 TBool
 
-genRhs (EApp _ expr expr2) = return $ AImm 1 TInt -- TODO
-genRhs (EString _ expr) = return $ AImm 7 TStr -- TODO
+genRhs (EApp pos ident exprs) = do
+  addrs <- mapM genRhs exprs
+  (_, _, funAddr) <- getIdentVal pos ident
+  let retTy = getAddrType funAddr
+  case retTy of
+    TVoid -> do
+               Emitter.emitVoidCall funAddr addrs
+               return undefined -- it will not be used anyway
+    _ -> do
+          r <- freshRegister retTy
+          Emitter.emitCall r funAddr addrs
+          return r
 
-genRhs (Neg p expr) = genRhs (EAdd p (ELitInt p 0) (Minus p) expr) -- TODO optimize
--- For 'i1' type, logical not is a negation:
-genRhs (Not p expr) = genRhs (Neg p expr) -- TODO check
+genRhs (EString _ str) = do
+  -- addr <- insertStringConstant str -- TODO
+  return $ AStr (UIdent "" 0) TStr -- TODO
 
-genRhs (EMul _ expr op expr2) = do
+genRhs (Neg p expr) = genBinOp "sub" (ELitInt p 0) expr
+-- logical not is a substraction from True, when operating on 'i1' type
+genRhs (Not p expr) = genBinOp "sub" (ELitTrue p) expr
+
+genRhs (EMul _ expr op expr2) = genBinOp opName expr expr2
+  where
+    opName = case op of
+      Times _ -> "mul"
+      Div _ -> "sdiv"
+      Mod _ -> "srem"
+
+-- HEAD
+genRhs (EAdd _ expr (Minus _) expr2) = genBinOp "sub" expr expr2
+
+genRhs (EAdd pos expr (Plus _) expr2) = do
   addr <- genRhs expr
   addr2 <- genRhs expr2
-  r <- freshRegister TInt
-  opName <- return $ case op of
-    Times _ -> "mul"
-    Div _ -> "sdiv"
-    Mod _ -> "srem"
+  let ty = getAddrType addr
+  r <- freshRegister ty;
+  case getAddrType addr of
+    TInt -> Emitter.emitBinOp "add" r addr addr2
+    TStr -> do
+              -- TODO check
+              (_, _, funAddr) <- getIdentVal Nothing (Ident "concat")
+              Emitter.emitCall r funAddr [addr, addr2]
+    _ -> failPos pos $ "Compiler error" -- this shouldn't happen after type check
+  return r
+
+genRhs (ERel pos expr rel expr2) = do
+  addr <- genRhs expr
+  addr2 <- genRhs expr2
+  r <- freshRegister TBool
+  let ty = getAddrType addr -- = getAddrType addr2 (thanks to type check)
+  case ty of
+    TInt -> Emitter.emitCmp r rel 's' addr addr2
+    TBool -> Emitter.emitCmp r rel 'u' addr addr2
+    TStr -> do
+              (_, _, funAddr) <- getIdentVal Nothing (Ident "compareStrings")
+              Emitter.emitCall r funAddr [addr, addr2]
+    _ -> failPos pos $ "Compiler error" -- this shouldn't happen after type check
+  return r
+
+genRhs (EAnd pos expr expr2) = return $ AImm 7 TInt -- TODO
+genRhs (EOr pos expr expr2) = return $ AImm 7 TInt -- TODO
+
+genBinOp :: String -> Expr Pos -> Expr Pos -> GenM Addr
+genBinOp opName expr expr2 = do
+  addr <- genRhs expr
+  addr2 <- genRhs expr2
+  r <- freshRegister (getAddrType addr)
   Emitter.emitBinOp opName r addr addr2
   return r
 
--- HEAD
-genRhs (EAdd _ expr op expr2) = return $ AImm 1 TInt -- TODO
-genRhs (ERel _ expr rel expr2) = return $ AImm 1 TInt -- TODO
-genRhs (EAnd _ expr expr2) = return $ AImm 1 TInt -- TODO
-genRhs (EOr _ expr expr2) = return $ AImm 1 TInt -- TODO
-
-{-|
------------ Expressions compilation --------------------
-
--- Return expression address
-genExp :: Exp -> GenM Addr
-genExp (ExpLit l) = return $ Immediate l
-genExp (ExpAdd e1 e2) = genBinOp "add" e1 e2
-genExp (ExpSub e1 e2) = genBinOp "sub" e1 e2
-genExp (ExpMul e1 e2) = genBinOp "mul" e1 e2
-genExp (ExpDiv e1 e2) = genBinOp "sdiv" e1 e2
-genExp (ExpVar ident) = do
-  a <- getAddr ident
-  r <- freshRegister
-  emitLoad a r
-  return r
-
-genBinOp :: String -> Exp -> Exp -> GenM Addr
-genBinOp op e1 e2 = do
-  a1 <- genExp e1
-  a2 <- genExp e2
-  r <- freshRegister
-  emitBinOp op r a1 a2
-  return r
-
-|-}
 
 genLhs :: Ident -> GenM Addr
 genLhs ident = do
@@ -271,15 +292,16 @@ genLhs ident = do
 ------------------------- Conditions ----------------------------------------
 genCond :: Expr Pos -> Label -> Label -> GenM ()
 genCond expr trueLabel falseLabel = do
-  addr <- genCmp (LTH Nothing) (AImm 0 TInt) (AImm 1 TInt) -- TODO
-  genCondJmp addr trueLabel falseLabel
+  let flag = AImm 1 TBool
+  genCondJmp flag trueLabel falseLabel
 
 
-genCmp :: RelOp Pos -> Addr -> Addr -> GenM Addr
-genCmp rel lAddr rAddr = do
-  resAddr <- freshRegister TBool
-  Emitter.emitCmp resAddr rel lAddr rAddr
-  return resAddr
+-- TODO
+-- genCmp :: RelOp Pos -> Char -> Addr -> Addr -> GenM Addr
+-- genCmp rel sign lAddr rAddr = do
+--   resAddr <- freshRegister TBool
+--   Emitter.emitCmp resAddr rel sign lAddr rAddr
+--   return resAddr
 
 ------------------------- Terminators ---------------------------------------
 -- NOTE: all those (and only those) finish a block

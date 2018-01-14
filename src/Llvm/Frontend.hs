@@ -1,12 +1,12 @@
 module Llvm.Frontend (analyzeProgram) where
 
-import Control.Monad ( liftM, unless, when )
+import Control.Monad ( liftM, unless )
 import Control.Monad.Trans.State.Lazy
 import qualified Data.Map as Map
 
 import Llvm.Core
 import Llvm.State
-import qualified Llvm.LibraryDecl as Lib
+import qualified Llvm.StdLib as Lib
 
 import AbsLatte
 
@@ -28,14 +28,15 @@ forbidVoid :: Type Pos -> GenM ()
 forbidVoid (Void pos) = failPos pos $ "Type error: variables cannot have void type"
 forbidVoid _ = return ()
 
-forbidVoidComparison :: Type Pos -> GenM ()
-forbidVoidComparison (Void pos) = failPos pos "Type Error: Cannot compare 'void' type"
-forbidVoidComparison _ = return ()
+forbidVoidFunComparison :: Type Pos -> GenM ()
+forbidVoidFunComparison (Void pos) = failPos pos "Type Error: Cannot compare 'void' type"
+forbidVoidFunComparison (Fun pos _ _) = failPos pos "Type Error: Cannot compare function type"
+forbidVoidFunComparison _ = return ()
 
 checkEqual :: Pos -> Type Pos -> Type Pos -> GenM ()
 checkEqual pos expTy ty =
   unless ((plainType ty) == (plainType expTy)) $ failPos pos $
-    "Type error, got: " ++ printLatte ty ++ ", expected: " ++ printLatte expTy
+    "Type error: got: " ++ printLatte ty ++ ", expected: " ++ printLatte expTy
 
 
 ------------------------ Analysis --------------------------------------------
@@ -122,8 +123,10 @@ analyzeStmt (Decl pos ty items) = do
 analyzeStmt (Empty pos) = return (Empty pos, False)
 
 analyzeStmt (SExp pos expr) = do
+  case expr of
+    (EApp _ _ _) -> return ()
+    _ -> failPos pos $ printTreeOneLine expr ++ "is not a statement"
   (newExpr, exprTy) <- analyzeExpr expr
-  -- TODO type?
   return (SExp pos newExpr, False)
 
 analyzeStmt (Ass pos ident expr) = do
@@ -251,16 +254,21 @@ analyzeExpr (EAdd pos expr op expr2) = do
   checkEqual (getExprPos expr2) exprTy exprTy2
   return (EAdd pos newExpr op newExpr2, exprTy)
 
-analyzeExpr (ERel pos expr op expr2) = do
+analyzeExpr (ERel pos expr rel expr2) = do
   (newExpr, exprTy) <- analyzeExpr expr
   (newExpr2, exprTy2) <- analyzeExpr expr2
-  case op of
-      EQU _ -> forbidVoidComparison exprTy
-      NE _ -> forbidVoidComparison exprTy
-      _ -> checkEqual (getExprPos expr) (Int Nothing) exprTy
+  case rel of
+      EQU _ -> forbidVoidFunComparison exprTy
+      NE _ -> forbidVoidFunComparison exprTy
+      _ -> case exprTy of
+            Int _ -> return ()
+            Bool _ -> return ()
+            _ -> failPos (getExprPos expr) $
+              "Inequality can be applied only to boolean and int type, not: " ++ printLatte exprTy
 
-  checkEqual (getExprPos expr2) exprTy exprTy2  -- types must be equal
-  return (ERel pos newExpr op newExpr2, Bool pos)
+  unless ((plainType exprTy) == (plainType exprTy2)) $ failPos (getExprPos expr) $
+    "Type error: compared types must be equal"
+  return (ERel pos newExpr rel newExpr2, Bool pos)
 
 analyzeExpr (EAnd pos expr expr2) = do
   (newExpr, exprTy) <- analyzeExpr expr

@@ -3,6 +3,7 @@ module Llvm.Core where
 import qualified Data.Map as Map
 
 import AbsLatte
+import PrintLatte
 
 --------------------------------- Basic types -------------------------------
 type Pos = Maybe (Int, Int)
@@ -21,11 +22,21 @@ data Addr =
   | AReg Integer TType        -- Temporary Registers
   | ALoc UniqueIdent TType    -- Local variables
   | AArg UniqueIdent TType    -- Function arguments
+  | AStr UniqueIdent TType    -- String constants
   | AFun Ident TType          -- Functions (+ return type)
   | ALab Label                -- Block labels
 
 instance Show Addr where    -- TODO needed?
   show _ = "ADDR"
+
+getAddrType :: Addr -> TType
+getAddrType (AImm _ ty) = ty
+getAddrType (AReg _ ty) = ty
+getAddrType (ALoc _ ty) = ty
+getAddrType (AStr _ ty) = ty -- TODO always TStr?
+getAddrType (AArg _ ty) = ty
+getAddrType (AFun _ ty) = ty
+getAddrType (ALab _) = TLab
 
   ------------------------- Identifiers --------------------------------
 
@@ -90,3 +101,8 @@ defaultInit (Fun _ _ _) = undefined -- this should not happen
 
 concatInstrs :: [Instr] -> String
 concatInstrs = unlines
+
+printTreeOneLine :: Print a => a -> String
+printTreeOneLine tree = oneLiner $ printTree tree
+  where
+    oneLiner str = [if ch /= '\n' then ch else ' ' | ch <- str]
