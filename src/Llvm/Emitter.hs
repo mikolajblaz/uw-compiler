@@ -76,7 +76,7 @@ emitVoidCall fAddr argAddrs = emit $
 
 emitPhi :: Addr -> [(Addr, Addr)] -> GenM ()
 emitPhi r options = let (regName, ty) = split r in emit $
-  regName ++ " = phi " ++ show ty ++ intercalate ", " (map showOpt options)
+  regName ++ " = phi " ++ show ty ++ " " ++ intercalate ", " (map showOpt options)
     where
       showOpt (val, label) = show [val, label]
 

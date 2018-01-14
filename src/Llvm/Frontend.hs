@@ -54,12 +54,17 @@ analyzeTopDef (FnDef pos ty ident@(Ident i) args block) = do
   startNewFun ident ty
   analyzeArgs args
   -- NOTE: now, localEnv is set, it will be merged with outerEnv in the following call:
-  (newBlock, endsRet) <- analyzeBlock block
+  (Block pos newStmts, endsRet) <- analyzeBlock block
 
   unless (endsRet || (plainType ty == TVoid)) $
     fail $ "Error: missing return statement in function " ++ show i ++ " (declared in " ++ printPos pos ++ ")"
 
-  return $ FnDef pos ty ident args newBlock
+  -- append return if not present
+  let finalStmts = if endsRet
+      then newStmts
+      else newStmts ++ [VRet Nothing]
+
+  return $ FnDef pos ty ident args (Block pos finalStmts)
 
 
 analyzeArgs :: [Arg Pos] -> GenM ()

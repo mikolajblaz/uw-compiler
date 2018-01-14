@@ -275,13 +275,14 @@ genRhs (ERel pos expr rel expr2) = do
 genRhs e = do
   trueLabel <- freshLabel
   falseLabel <- freshLabel
-  afterLabel <- freshLabel
   genCond e trueLabel falseLabel
 
+  afterLabel <- freshLabel
   setCurrentBlock trueLabel
-  Emitter.emitComment $ "in block "++ show afterLabel ++ ", set a proper value using a phi construct"
+  Emitter.emitComment $ "empty branch used only by phi in block " ++ printAddr (ALab afterLabel)
   genJmp afterLabel
   setCurrentBlock falseLabel
+  Emitter.emitComment $ "empty branch used only by phi in block " ++ printAddr (ALab afterLabel)
   genJmp afterLabel
 
   setCurrentBlock afterLabel
