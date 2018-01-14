@@ -26,6 +26,9 @@ run: all
 	./latc_llvm ./tests/official/good/core003.lat    # generates tests/in1.ll and tests/in1.bc
 	# lli tests/test.bc               # runtime.bc already linked
 
+test: all
+	./test.sh tests/official/good/
+
 clean:
 	-rm -f src/*.log src/*.aux src/*.hi src/*.o src/*.dvi
 	-rm -f src/**/*.log src/**/*.aux src/**/*.hi src/**/*.o src/**/*.dvi
