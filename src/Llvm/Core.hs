@@ -27,7 +27,16 @@ data Addr =
   | ALab Label                -- Block labels
 
 instance Show Addr where    -- TODO needed?
-  show _ = "ADDR"
+  show = printAddr
+
+printAddr :: Addr -> String
+printAddr (AImm a _) = show a
+printAddr (AReg a _) = "%r" ++ show a
+printAddr (ALoc (UIdent var num) _) = "%loc" ++ show num ++ "_" ++ var
+printAddr (AStr (UIdent _ num) _)   = "@str" -- TODO ++ show num
+printAddr (AArg (UIdent var num) _) = "%arg" ++ show num ++ "_" ++ var
+printAddr (AFun (Ident i) _) = "@" ++ i
+printAddr (ALab label) = "%L" ++ show label
 
 getAddrType :: Addr -> TType
 getAddrType (AImm _ ty) = ty

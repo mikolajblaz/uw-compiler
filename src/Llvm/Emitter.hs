@@ -9,15 +9,6 @@ import Llvm.Core
 import Llvm.State
 
 -- helper functions
-printAddr :: Addr -> String
-printAddr (AImm a _) = show a
-printAddr (AReg a _) = "%r" ++ show a
-printAddr (ALoc (UIdent var num) _) = "%loc" ++ show num ++ "_" ++ var
-printAddr (AStr (UIdent _ num) _)   = "@str" -- TODO ++ show num
-printAddr (AArg (UIdent var num) _) = "%arg" ++ show num ++ "_" ++ var
-printAddr (AFun (Ident i) _) = "@" ++ i
-printAddr (ALab label) = "%L" ++ show label
-
 printLabelName :: Label -> String
 printLabelName label = "L" ++ show label
 
@@ -82,6 +73,12 @@ emitCall result fAddr argAddrs = emit $
 emitVoidCall :: Addr -> [Addr] -> GenM ()
 emitVoidCall fAddr argAddrs = emit $
   "call " ++ printAddrTyped fAddr ++ "(" ++ outputArgs argAddrs ++ ")" -- TODO
+
+emitPhi :: Addr -> [(Addr, Addr)] -> GenM ()
+emitPhi r options = let (regName, ty) = split r in emit $
+  regName ++ " = phi " ++ show ty ++ intercalate ", " (map showOpt options)
+    where
+      showOpt (val, label) = show [val, label]
 
 emitRet :: Addr -> GenM ()
 emitRet a = emit $ "ret " ++ printAddrTyped a

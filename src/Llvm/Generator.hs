@@ -271,8 +271,24 @@ genRhs (ERel pos expr rel expr2) = do
     _ -> failPos pos $ "Compiler error" -- this shouldn't happen after type check
   return r
 
-genRhs (EAnd pos expr expr2) = return $ AImm 7 TInt -- TODO
-genRhs (EOr pos expr expr2) = return $ AImm 7 TInt -- TODO
+-- remaining exps are EAnd and EOr, both handled the same way:
+genRhs e = do
+  trueLabel <- freshLabel
+  falseLabel <- freshLabel
+  afterLabel <- freshLabel
+  genCond e trueLabel falseLabel
+
+  setCurrentBlock trueLabel
+  Emitter.emitComment $ "in block "++ show afterLabel ++ ", set a proper value using a phi construct"
+  genJmp afterLabel
+  setCurrentBlock falseLabel
+  genJmp afterLabel
+
+  setCurrentBlock afterLabel
+  r <- freshRegister TBool
+  Emitter.emitPhi r [(AImm 1 TBool, ALab trueLabel), (AImm 0 TBool, ALab falseLabel)]
+  return r
+
 
 genBinOp :: String -> Expr Pos -> Expr Pos -> GenM Addr
 genBinOp opName expr expr2 = do
@@ -290,18 +306,25 @@ genLhs ident = do
 
 
 ------------------------- Conditions ----------------------------------------
+-- | Lazy condition checking by a "jumping code"
 genCond :: Expr Pos -> Label -> Label -> GenM ()
+genCond (EAnd _ expr expr2) trueLabel falseLabel = do
+  midLabel <- freshLabel
+  genCond expr midLabel falseLabel
+
+  setCurrentBlock midLabel
+  genCond expr2 trueLabel falseLabel
+
+genCond (EOr _ expr expr2) trueLabel falseLabel = do
+  midLabel <- freshLabel
+  genCond expr trueLabel midLabel
+
+  setCurrentBlock midLabel
+  genCond expr2 trueLabel falseLabel
+
 genCond expr trueLabel falseLabel = do
-  let flag = AImm 1 TBool
-  genCondJmp flag trueLabel falseLabel
-
-
--- TODO
--- genCmp :: RelOp Pos -> Char -> Addr -> Addr -> GenM Addr
--- genCmp rel sign lAddr rAddr = do
---   resAddr <- freshRegister TBool
---   Emitter.emitCmp resAddr rel sign lAddr rAddr
---   return resAddr
+  addr <- genRhs expr
+  genBr addr trueLabel falseLabel
 
 ------------------------- Terminators ---------------------------------------
 -- NOTE: all those (and only those) finish a block
@@ -310,8 +333,8 @@ genJmp label = do
   Emitter.emitJmp (ALab label)
   finishBlock
 
-genCondJmp :: Addr -> Label -> Label -> GenM ()
-genCondJmp flag trueLabel falseLabel = do
+genBr :: Addr -> Label -> Label -> GenM ()
+genBr flag trueLabel falseLabel = do
   Emitter.emitBr flag (ALab trueLabel) (ALab falseLabel)
   finishBlock
 
