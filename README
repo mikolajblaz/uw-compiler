@@ -35,6 +35,9 @@ Obie części korzystają ze wspólnych plików Core.hs oraz State.hs.
 - State.hs zawiera opis stanu (GenState), który jest używany podczas kompilowania
 programów, oraz operacje na tym stanie.
 
+Dodatkowo w pliku StdLib.hs znajdują się deklaracje funkcji bibliotecznych
+jeżyka Latte, w postaci drzewa składni.
+
 ## Frontend
 Całość znajduje się w pliku Frontend.hs.
 Działanie frontendu obejmuje:
@@ -94,7 +97,6 @@ były niezależne od architektury (chociaż nastawione na Llvm).
 
 Funkcje emit* emitują kod do stanu, zaś instrukcje output* wykonywane są poza monadą GenM
 i zwracają instrukcje w wyniku.
-
 
 
 # Dospecyfikowanie języka Latte
