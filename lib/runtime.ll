@@ -5,12 +5,14 @@
 
 ; empty string
 @empty.str = private unnamed_addr constant [1 x i8] zeroinitializer, align 1
+@error.str = private unnamed_addr constant [14 x i8] c"runtime error\00", align 1
 
 declare i32 @printf(i8*, ...)
 declare i32 @scanf(i8*, ...)
 declare i32 @puts(i8*)
 declare i8* @gets(i8*)
 declare i8* @malloc(i32)
+declare void @exit(i32)
 
 declare i32 @strlen(i8*)
 declare i8* @strcpy(i8*, i8*)
@@ -64,4 +66,12 @@ define i1 @compareStrings(i8* %s1, i8* %s2) {
   %1 = call i32 @strcmp(i8* %s1, i8* %s2)
   %2 = icmp eq i32 %1, 0
   ret i1 %2
+}
+
+define void @error() {
+  %1 = bitcast [14 x i8]* @error.str to i8*
+  call void @printString(i8* %1)
+  call void @exit(i32 1)
+  unreachable
+  ret void
 }

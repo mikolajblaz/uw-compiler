@@ -1,0 +1,5 @@
+int main() {
+  printInt(5 + 7);
+  error();
+  return 0;;
+}

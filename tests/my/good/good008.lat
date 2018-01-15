@@ -1,0 +1,9 @@
+int main() {
+  printString(f("a"));
+  return 3;
+}
+
+string f(string s) {
+  string x = s + s;
+  return x;
+}
