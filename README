@@ -2,37 +2,98 @@ Autor: Mikołaj Błaż
 Nr indeksu: 346862
 
 
-# Kompilator Instant
+# Kompilator Latte
+## Struktura katalogów
 Kompilator został zbudowany przy użyciu narzędzi BNFC, Alex oraz Happy.
 
-Pliki src/Core.hs oraz src/State.hs są wspólne dla obu kompilatorów i zawierają
-podstawowe używane typy oraz operacje na stanie.
+Folder src/ zawiera początkowo plik Latte.cf, z którego zostaną wygenerowane
+wszystkie pliki potrzebne do parsowania programów Latte.
 
-W folderach src/Jvm oraz src/Llvm są pliki charakterystyczne dla poszczególnych
-kompilatorów.
+Folder src/Llvm/ zawiera wszystkie pliki źródłowe specyficzne dla kompilatora.
 
-Katalog lib zawiera plik jasmin.jar oraz pliki Runtime.j, Runtime.ll z których
-(po uruchomieniu make) powstaną pliki potrzebne podczas wykonywania programów
-w języku Instant.
+Katalog lib/ zawiera plik jasmin.jar oraz plik runtime.ll z którego
+(po uruchomieniu make) powstanie plik runtime.bc potrzebny podczas wykonywania
+programów w języku Latte.
+
+## Uruchamianie
+Tak jak w wymaganiach zadania, aby skompilować i uruchomić program Latte
+znajdujący się w pliku foo/bar/baz.lat, należy wykonać z korzenia projektu:
+./latc foo/bar/baz.lat
+lli foo/bar/baz.bc
+
+Dodatkowo zostanie wygenerowany plik foo/bar/baz.ll.
 
 
-# Uruchamianie
-W katalogu tests/ znajduje się jeden przykładowy plik w języku Instant.
-Uruchamianie kompilatorów insc_jvm oraz insc_llvm na tym pliku jest
-zobrazowane w pliku Makefile (polecenie 'make run').
+# Działanie kompilatora
+Kompilator podzielony jest logicznie na Frontend i Backend.
+Oba działają na programie Latte w spostaci abstrakcyjnej składni,
+wygenerowanej przez lekser i parser, wygenerowane przez programy Alex i Happy.
+
+## Rdzeń (część wspólna)
+Obie części korzystają ze wspólnych plików Core.hs oraz State.hs.
+- Core.hs zawiera definicje podstawowych typów danych i operacji na nich.
+- State.hs zawiera opis stanu (GenState), który jest używany podczas kompilowania
+programów, oraz operacje na tym stanie.
+
+## Frontend
+Całość znajduje się w pliku Frontend.hs.
+Działanie frontendu obejmuje:
+- sprawdzenie poprawności typów
+- sprawdzenie poprawności identyfikatorów, deklaracji, itp.
+
+__Dodatkowe optymalizacje__:
+- upraszczanie wyrażeń logicznych, np.:
+ - true || false -----> true
+ - true && x     -----> x
+
+- Optymalizowanie intrukcji warunkowych (if, while) w przypadku,
+gdy warunek jest trywialny (po uproszczeniu), np.
+ - while (true && false) bodyStmt; -------> empty instruction
+
+- Sprawdzanie występowania instrukcji return (dla funkcji nie-void)
+oraz usuwanie martwego kodu po takich instrukcjach.
+Sprawdzenie następuje po uproszczeniu wyrażeń logicznych i instrukcji warunkowych, np.
+ - {if (true) return 7; else return 0;} int x; return 0; -------> return 7,
+ - ale: if (x) return 1; else x = 0;  --------> bez zmian
+
+Drzewo składni jest przechodzone jednokrotnie, a więc wszystkie powyższe
+działania wykonywane są równocześnie.
+Dzieje się to w funkcjach:
+analyzeProgram, analyzeTopDef, analyzeBlock, itd. (analyze*)
 
 
-# Generowanie instrukcji wyrażeń
-W dwóch kompilatorów stosuje się nieco inne podejście:
-JVM:
-Funkcja 'genExp' zwraca wygenerowane instrukcje oraz wymaganą głebokość stosu
-do wykonania tego wyrażenia. Dzięki temu można podczas generowania instrukcji
-zamieniać kolejność obliczania podwyrażeń w zależności od głębokości stosu.
-LLVM:
-Funkcja 'genExp' zwraca jedynie rejestr, w którym zostanie umieszczone
-obliczone wyrażenie, natomiast wygenerowane instrukcje są akumulowane w
-stanie. Upraszcza to logikę generowania i korzysta z faktu, że po
-wygenerowaniu instrukcji nie jest zmieniana ich kolejność.
+## Backend
+### Generator
+Główna logika backendu znajduje się w pliku Generator.hs.
+Tam właśnie kolejno przetwarzane są funkcje (processTopDef).
+Przetworzenie funkcji obejmuje:
+- prawie całkowite wyczyszczenie stanu kompilatora
+(oprócz licznika identyfikatorów, środowiska funkcji i puli stałych napisowych)
+- Przetworzenie argumentów i ciała funkcji.
+W tej części wygenerowany kod jest emitowany do stanu.
+- Na końcu, wyciągnięcie ze stanu wygenerowanych instrukcji i zwrócenie ich wyżej.
+
+
+Przetwarzanie ciała funkcji polega mocno na obecności __stanu__, w którym znajduje
+się informacja o aktualnym bloku prostym (Llvm), w którym się znajdujemy.
+Poprawność etykietowania bloków prostych zapewniają 2 niezmienniki instrukcji gen*,
+opisane w okolicach linii 90 w pliku Generator.hs.
+
+Bloki proste są zakańczane przez intrukcje terminujące (_br_ i _ret_, emitowane
+przez funkcje genJmp, genBr, genRet, genVRet, na samym końcu pliku w sekcji _Terminators_).
+
+Przed wyemitowaniem każdej instrukcji, emitowany jest komentarz z wypisaną tą instrukcją
+(genStmtCommentWrapper), co ułatwia zrozumienie kodu w plikach *.ll
+
+Generowany kod jest w postaci SSA, ale zmienne lokalne znajdują się w pamięci a nie w rejestrach.
+
+### Emitter
+Ten moduł emituje właściwy kod.
+Dopiero tutaj istotna jest architektura docelowa, wcześniejsze transformacje
+były niezależne od architektury (chociaż nastawione na Llvm).
+
+Funkcje emit* emitują kod do stanu, zaś instrukcje output* wykonywane są poza monadą GenM
+i zwracają instrukcje w wyniku.
 
 
 
@@ -42,6 +103,7 @@ wygenerowaniu instrukcji nie jest zmieniana ich kolejność.
 * Porównania '<', '>', '<=', '>=' mogą odbywać się tylko między typami _int_ i _boolean_
 * Po instrukcji return mogą występować kolejne instrukcje (nie jest to błąd),
   jednak takie instrukcje są wykrywane i usuwane na etapie frontendu.
-* Funkcja _readString_ wczytuje całą linię, ale maksymalnie, 4096 znaków.
+* Funkcja _readString_ wczytuje całą linię, ale maksymalnie 4096 znaków.
   W przypadku próby wczytania dłuższych linii, zachowanie jest niezdefiniowane.
-* Funkcja _readInt_ wczytuje liczbę oraz białe znaki po tej liczbie (m.in. znak '\n')
+* Funkcja _readInt_ wczytuje liczbę oraz białe znaki występujące na wejściu
+po tej liczbie (m.in. znak '\n')

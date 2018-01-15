@@ -7,10 +7,12 @@ int main() {
   printInt(readInt());
   readInt();
   printInt(readInt());
-  
+
   x = readString();
 
   printString(x);
   printString(y);
+
+  printInt(readInt());
   return 0;
 }

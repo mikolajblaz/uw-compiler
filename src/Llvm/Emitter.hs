@@ -3,6 +3,7 @@ module Llvm.Emitter where
 import Control.Monad.Trans.State.Lazy
 import Data.Char (ord)
 import Data.List
+import qualified Data.Map as Map
 import Numeric (showHex)
 
 import AbsLatte
@@ -120,3 +121,9 @@ showSConst (SConst str addr) = let (strName, ty) = split addr in
       where
         showHexString str = concat $ map showHexChar str
         showHexChar char = '\\' : (showHex (ord char) "")
+
+outputBlock :: Map.Map Label SBlock -> Label -> [Instr]
+outputBlock blocks label = let instrs = Map.lookup label blocks in
+  case instrs of
+    Nothing -> []
+    Just instrs -> (printLabelName label ++ ":") : instrs

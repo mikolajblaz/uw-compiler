@@ -78,27 +78,18 @@ processBlock (Block _ stmts) = do
   let endsRet = or endsRets
   return endsRet
 
-
-
 finishFunction :: GenM [Instr] -- TODO
 finishFunction = do
   labelCnt <- gets labelCnt
   let funLabels = [0 .. labelCnt - 1]
-  funIstrs <- mapM outputBlock funLabels
-  return $ concat funIstrs
-
-outputBlock :: Label -> GenM [Instr]
-outputBlock label = do
   blocks <- gets simpleBlocks
-  let instrs = Map.lookup label blocks
-  case instrs of
-    Nothing -> return []
-    Just instrs -> return $ (Emitter.printLabelName label ++ ":") : instrs
+  let funIstrs = map (Emitter.outputBlock blocks) funLabels
+  return $ concat funIstrs
 
 ------------------------------ Generator part ----------------------------------
 -- NOTE:
 -- generator Invariant #1
--- when any 'gen' function is called, there is some block started already
+-- when any 'gen*' function is called, there is some block started already
 -- (stored in state in currentBlock)
 
 -- NOTE:
@@ -157,8 +148,6 @@ genStmt (CondElse _ cond thenStmt elseStmt) = do
   unless endsRetElse $ genJmp afterLabel
 
   let endsRet = endsRetThen && endsRetElse
-  -- this might be an invariant exception, but the function ends anyway
-  -- and there are no statements in function left (thanks to trimming in frontend)
   unless endsRet $ setCurrentBlock afterLabel
   return endsRet
 
@@ -270,7 +259,6 @@ genRhs (EAdd pos expr (Plus _) expr2) = do
   case getAddrType addr of
     TInt -> Emitter.emitBinOp "add" r addr addr2
     TStr -> do
-              -- TODO check
               (_, _, funAddr) <- getIdentVal Nothing (Ident "concatStrings")
               Emitter.emitCall r funAddr [addr, addr2]
     _ -> failPos pos $ "Compiler error" -- this shouldn't happen after type check
@@ -280,7 +268,7 @@ genRhs (ERel pos expr rel expr2) = do
   addr <- genRhs expr
   addr2 <- genRhs expr2
   r <- freshRegister TBool
-  let ty = getAddrType addr -- = getAddrType addr2 (thanks to type check)
+  let ty = getAddrType addr -- == getAddrType addr2 (thanks to type check)
   case ty of
     TInt -> Emitter.emitCmp r rel 's' addr addr2
     TBool -> Emitter.emitCmp r rel 'u' addr addr2
