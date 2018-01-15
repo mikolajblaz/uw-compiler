@@ -3,9 +3,11 @@
 int main() {
   int x = readInt();
   string y = readString();
+  // y = readString();
   string z = readString();
+  //z = readString();
 
   printInt(x-5);
-  printString(y+z);  
+  printString(y+z);
   return 0 ;
 }

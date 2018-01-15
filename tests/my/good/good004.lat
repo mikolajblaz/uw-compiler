@@ -1,5 +1,7 @@
 int main() {
   string s;
   printString(s);
-  string s = printString(s);
+  printString(s);
+  string ss;
+  return 1;
 }

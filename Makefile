@@ -22,10 +22,6 @@ src/LexLatte.hs: src/LexLatte.x
 lib/runtime.bc: lib/runtime.ll
 	cd lib; llvm-as -o runtime.bc runtime.ll
 
-run: all
-	./latc_llvm ./tests/official/good/core003.lat    # generates tests/in1.ll and tests/in1.bc
-	# lli tests/test.bc               # runtime.bc already linked
-
 test: all
 	./test.sh tests/official/good/
 

@@ -3,7 +3,7 @@ int main() {
   x = f(true < false || false);
   x = f(true && x);
   printInt(45);
-  f(false || f(true) || f(true));
+  f((false || f(true) || f(true)) && f(true));
   return 0;
 }
 

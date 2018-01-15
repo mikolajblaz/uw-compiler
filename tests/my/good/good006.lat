@@ -1,0 +1,10 @@
+int main() {
+  string empty = "";
+  printString(empty);
+  printString("xxx");
+  printString("");
+  printString("xxx");
+  printString(" ");
+  printString("\"");
+  return 0;
+}

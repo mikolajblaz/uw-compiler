@@ -2,6 +2,7 @@
 *.o
 *.ll
 *.bc
+*.out
 
 .gitignore
 src/ParLatte.hs

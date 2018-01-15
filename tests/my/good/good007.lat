@@ -1,0 +1,16 @@
+int main() {
+  string x, y, z = "arb";
+  printString(z);
+  y = readString();
+  printInt(readInt());
+  readInt();
+  printInt(readInt());
+  readInt();
+  printInt(readInt());
+  
+  x = readString();
+
+  printString(x);
+  printString(y);
+  return 0;
+}

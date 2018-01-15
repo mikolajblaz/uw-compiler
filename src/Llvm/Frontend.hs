@@ -225,13 +225,15 @@ analyzeExpr (EApp pos ident@(Ident i) exprs) = do
   (newExprs, exprTys) <- liftM unzip $ mapM analyzeExpr exprs
   unless (length argsTys == length exprTys) $ failPos pos $
     "Wrong number of arguments to apply to function " ++ show i ++
-      ", got: " ++ show (length exprTys) ++ ", expected: " ++ show (length argsTys) ++ "arguments"
+      ", got: " ++ show (length exprTys) ++ ", expected: " ++ show (length argsTys) ++ " arguments"
   -- check arguments type equality
   mapM_ (\(eTy, aTy, poss) -> checkEqual poss aTy eTy) $ zip3 exprTys argsTys (map getExprPos exprs)
   return (EApp pos ident newExprs, retTy)
 
-analyzeExpr e@(EString pos _) = do
-  return (e, Str pos)
+analyzeExpr (EString pos str) = do
+  -- strip quotes added by BNFC
+  let noQuotes = tail $ init str
+  return (EString pos noQuotes, Str pos)
 
 analyzeExpr (Neg pos expr) = do
   (newExpr, exprTy) <- analyzeExpr expr
