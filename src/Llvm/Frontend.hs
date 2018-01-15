@@ -159,7 +159,6 @@ analyzeStmt (Decr pos ident) = do
 analyzeStmt (Cond pos cond thenStmt) = do
   newCond <- analyzeCond cond
   (newThen, endsRetThen) <- analyzeStmt thenStmt
-  -- TODO check if there was a return already
   return $ case newCond of
     ELitTrue _ -> (newThen, endsRetThen)
     ELitFalse pos -> (Empty pos, False)
@@ -169,7 +168,6 @@ analyzeStmt (CondElse pos cond thenStmt elseStmt) = do
   newCond <- analyzeCond cond
   (newThen, endsRetThen) <- analyzeStmt thenStmt
   (newElse, endsRetElse) <- analyzeStmt elseStmt
-  -- TODO check if there was a return already
   return $ case newCond of
     ELitTrue _ -> (newThen, endsRetThen)
     ELitFalse _ -> (newElse, endsRetElse)
@@ -243,7 +241,11 @@ analyzeExpr (Neg pos expr) = do
 analyzeExpr (Not pos expr) = do
   (newExpr, exprTy) <- analyzeExpr expr
   checkEqual pos (Bool Nothing) exprTy
-  return (Not pos newExpr, exprTy)
+  let finalExpr = case newExpr of
+                    ELitTrue pos -> ELitFalse pos
+                    ELitFalse pos -> ELitTrue pos
+                    e -> Not pos e
+  return (finalExpr, exprTy)
 
 analyzeExpr (EMul pos expr op expr2) = do
   (newExpr, exprTy) <- analyzeExpr expr
@@ -286,14 +288,23 @@ analyzeExpr (EAnd pos expr expr2) = do
   (newExpr2, exprTy2) <- analyzeExpr expr2
   checkEqual (getExprPos expr) (Bool Nothing) exprTy
   checkEqual (getExprPos expr2) (Bool Nothing) exprTy2
-  return (EAnd pos newExpr newExpr2, Bool pos)
+  -- lazy evaluation:
+  let finalExpr = case newExpr of
+                    ELitTrue _ -> newExpr2
+                    ELitFalse _ -> ELitFalse pos
+                    e -> EAnd pos e newExpr2
+  return (finalExpr, Bool pos)
 
 analyzeExpr (EOr pos expr expr2) = do
   (newExpr, exprTy) <- analyzeExpr expr
   (newExpr2, exprTy2) <- analyzeExpr expr2
   checkEqual (getExprPos expr) (Bool Nothing) exprTy
   checkEqual (getExprPos expr2) (Bool Nothing) exprTy2
-  return (EOr pos newExpr newExpr2, Bool pos)
+  let finalExpr = case newExpr of
+                    ELitTrue _ -> ELitTrue pos
+                    ELitFalse _ -> newExpr2
+                    e -> EOr pos e newExpr2
+  return (finalExpr, Bool pos)
 
 
 -- Helper

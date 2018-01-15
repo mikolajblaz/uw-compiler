@@ -13,7 +13,7 @@ latc_llvm: $(LEX) $(SRC)
 	$(CC) -isrc --make src/Llvm/CompilerIO.hs -o latc_llvm
 
 src/ParLatte.y src/LexLatte.x: src/Latte.cf
-	cd src; /home/students/inf/PUBLIC/MRJP/bin/bnfc Latte.cf
+	cd src; /home/students/inf/PUBLIC/MRJP/bin/bnfc --functor Latte.cf
 	cp lib/ErrM.hs src/
 
 src/ParLatte.hs: src/ParLatte.y
