@@ -71,11 +71,11 @@ emitBr flag l1 l2 = emit $ "br " ++ printAddrTyped flag ++ ", " ++ printAddrType
 
 emitCall :: Addr -> Addr -> [Addr] -> GenM ()
 emitCall result fAddr argAddrs = emit $
-  printAddr result ++ " = call " ++ printAddrTyped fAddr ++ "(" ++ outputArgs argAddrs ++ ")" -- TODO
+  printAddr result ++ " = call " ++ printAddrTyped fAddr ++ "(" ++ outputArgs argAddrs ++ ")"
 
 emitVoidCall :: Addr -> [Addr] -> GenM ()
 emitVoidCall fAddr argAddrs = emit $
-  "call " ++ printAddrTyped fAddr ++ "(" ++ outputArgs argAddrs ++ ")" -- TODO
+  "call " ++ printAddrTyped fAddr ++ "(" ++ outputArgs argAddrs ++ ")"
 
 emitPhi :: Addr -> [(Addr, Addr)] -> GenM ()
 emitPhi r options = let (regName, ty) = split r in emit $

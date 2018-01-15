@@ -20,7 +20,7 @@ checkMain = do
     Just (ty, _, _) -> return ty
 
   unless ((plainType mainType) == (TFun TInt [])) $ failPos (getTypePos mainType) $
-    "Type error: the 'main' function must have a signature 'int main ()"
+    "Type error: the 'main' function must have a signature 'int main ()'"
 
 
 ----------------------- Type check -------------------------------------------

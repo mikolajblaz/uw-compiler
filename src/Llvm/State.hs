@@ -2,6 +2,7 @@ module Llvm.State where
 
 import Control.Monad ( foldM )
 import Control.Monad.Trans.State.Lazy
+import Data.List ( nub )
 import qualified Data.Map as Map
 
 import Llvm.Core
@@ -13,34 +14,6 @@ import ErrM
 -------------------------- Compiler state --------------------------------
 type Counter = Integer
 
--- | Compiler state
-data GenState = GenSt {
-
-  blockEnv :: IdentEnv,
-  outerEnv :: IdentEnv,
-  topEnv :: IdentEnv,
-
-  -- counters
-  identCnt :: Counter,
-  regCnt :: Counter,
-  labelCnt :: Counter,
-
-  -- Blocks
-  currBlock :: Label,
-  blockBuilder :: [String], -- current block output
-  simpleBlocks :: Map.Map Label SBlock,
-  -- TODO block predecessors?
-
-  currentFun :: Ident,
-  currentFunRetType :: Type Pos,
-  funBlocks :: Map.Map Ident [Label],  --TODO remove
-
-  sConsts :: [StringConst] -- list of string constants
-}
-  deriving (Show)
-
--- GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sC
-
 -- | A monad to run compiler in
 type GenM = StateT GenState Err
 
@@ -48,7 +21,56 @@ emptyEnv :: IdentEnv
 emptyEnv = Map.empty
 
 initState :: GenState
-initState = GenSt Map.empty Map.empty Map.empty 0 0 0 0 [] Map.empty (Ident "") (Void Nothing) Map.empty []
+initState = GenSt (Map.empty, Map.empty, Map.empty) (0, 0, 0)
+              (0, [], Map.empty, [], Map.empty) (Void Nothing) []
+
+-- | Compiler state
+data GenState = GenSt {
+  -- blockEnv, outerEnv, topEnv, see below
+  envs :: (IdentEnv, IdentEnv, IdentEnv),
+  -- identCnt, regCnt, labelCnt, see below
+  counters :: (Counter, Counter, Counter),
+
+  -- Blocks:
+    -- currBlock :: Label,
+    -- blockBuilder :: [String], -- current block output
+    -- simpleBlocks :: Map.Map Label SBlock,
+    -- succBuilder :: [Label] -- current block successors, not used now
+    -- successors :: Map.Map Label [Label] -- not used now
+  blocksDesc :: (Label, [String], Map.Map Label SBlock, [Label], Map.Map Label [Label]),
+
+  currentFunRetType :: Type Pos,
+  sConsts :: [StringConst] -- list of string constants
+}
+  deriving (Show)
+
+-- GenSt envs cnts blocksDesc ret consts
+
+first, second, third :: (a, a, a) -> a
+first (a, _, _) = a
+second (_, b, _) = b
+third (_, _, c) = c
+
+blockEnv, outerEnv, topEnv :: GenState -> IdentEnv
+blockEnv = first  . envs
+outerEnv = second . envs
+topEnv   = third  . envs
+
+identCnt, regCnt, labelCnt :: GenState -> Counter
+identCnt = first  . counters
+regCnt   = second . counters
+labelCnt = third  . counters
+
+currBlock :: GenState -> Label
+currBlock    = (\(a, _, _, _, _) -> a) . blocksDesc
+blockBuilder :: GenState -> [String] -- current block output
+blockBuilder = (\(_, b, _, _, _) -> b) . blocksDesc
+simpleBlocks :: GenState -> Map.Map Label SBlock
+simpleBlocks = (\(_, _, c, _, _) -> c) . blocksDesc
+succBuilder :: GenState -> [Label] -- current block successors
+succBuilder  = (\(_, _, _, d, _) -> d) . blocksDesc
+successors :: GenState -> Map.Map Label [Label]
+successors   = (\(_, _, _, _, e) -> e) . blocksDesc
 
 ---------------------------- Helpers --------------------------------------
 getArgType :: Arg a -> Type a
@@ -64,24 +86,24 @@ getTypePos typos = case typos of
 
 -- Counters
 incIdentCnt :: GenState -> (Counter, GenState)
-incIdentCnt (GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sC) =
-  (iCnt, GenSt bEnv oEnv tEnv (iCnt + 1) rCnt lCnt cB bB sB fun fty funB sC)
+incIdentCnt (GenSt envs (iCnt, rCnt, lCnt) blocksDesc ret consts) =
+  (iCnt, GenSt envs (iCnt + 1, rCnt, lCnt) blocksDesc ret consts)
 
 incRegCnt :: GenState -> (Counter, GenState)
-incRegCnt (GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sC) =
-  (rCnt, GenSt bEnv oEnv tEnv iCnt (rCnt + 1) lCnt cB bB sB fun fty funB sC)
+incRegCnt (GenSt envs (iCnt, rCnt, lCnt) blocksDesc ret consts) =
+  (rCnt, GenSt envs (iCnt, rCnt + 1, lCnt) blocksDesc ret consts)
 
 incLabelCnt :: GenState -> (Counter, GenState)
-incLabelCnt (GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sC) =
-  (lCnt, GenSt bEnv oEnv tEnv iCnt rCnt (lCnt + 1) cB bB sB fun fty funB sC)
+incLabelCnt (GenSt envs (iCnt, rCnt, lCnt) blocksDesc ret consts) =
+  (lCnt, GenSt envs (iCnt, rCnt, lCnt + 1) blocksDesc ret consts)
 
 addInstr :: Instr -> GenState -> GenState
-addInstr instr (GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sC) =
-  GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB (instr : bB) sB fun fty funB sC
+addInstr instr (GenSt envs cnts (curr, instrs, blocks, succB, succs) ret consts) =
+  GenSt envs cnts (curr, (instr : instrs), blocks, succB, succs) ret consts
 
 setBlock :: Label -> GenState -> GenState
-setBlock label (GenSt bEnv oEnv tEnv iCnt rCnt lCnt _ bB sB fun fty funB sC) =
-  GenSt bEnv oEnv tEnv iCnt rCnt lCnt label bB sB fun fty funB sC
+setBlock label (GenSt envs cnts (_, instrs, blocks, succB, succs) ret consts) =
+  GenSt envs cnts (label, instrs, blocks, succB, succs) ret consts
 -------------------------- Operations on state ----------------------
 
 -- Inside GenM
@@ -125,19 +147,20 @@ getIdentType pos ident = do
 
 finishBlock :: GenM ()
 finishBlock = do
-  GenSt lEnv oEnv tEnv iCnt rCnt lCnt currBlock blockBuilder simpleBlocks cFun fty funB sC <- get
-  let newBlocks = Map.insert currBlock (reverse blockBuilder) simpleBlocks
-  put $ GenSt lEnv oEnv tEnv iCnt rCnt lCnt currBlock [] newBlocks cFun fty funB sC
+  GenSt envs cnts (curr, instrs, blocks, succB, succs) ret consts <- get
+  let newBlocks = Map.insert curr (reverse instrs) blocks
+  let newSuccs = Map.insert curr (nub succB) succs -- unique labels
+  put $ GenSt envs cnts (curr, [], newBlocks, succB, succs) ret consts
 
 ---------------------------- Functions ------------------------------------
 -- TopEnv
 startNewFun :: Ident -> Type Pos -> GenM ()
 startNewFun ident ty = do
-  GenSt _ _ tEnv iCnt _ _ _ _ _ _ _ _ sConsts <- get
+  GenSt (_, _, tEnv) (iCnt, _, _) _ _ sConsts <- get
   put $ initState
   setTopOuterEnv tEnv
-  modify (\(GenSt bEnv oEnv tEnv _ rCnt lCnt cB bB sB _ _ funB _) ->
-    GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB ident ty funB sConsts)
+  modify (\(GenSt envs (_, rCnt, lCnt) blocks _  _) ->
+    GenSt envs (iCnt, rCnt, lCnt) blocks ty sConsts)
 
 buildTopEnv :: [TopDef Pos] -> GenM ()
 buildTopEnv defs = do
@@ -152,17 +175,17 @@ insertTopDef (FnDef pos ty ident args _) topEnv = do
 ------------------- Operations on identifiers environment -----------------
 
 setNewEnvs :: IdentEnv -> IdentEnv -> GenM ()
-setNewEnvs blockEnv outerEnv = modify (\(GenSt _ _ tEnv iCnt rCnt lCnt cB bB sB fun fty funB sC) ->
-    GenSt blockEnv outerEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sC)
+setNewEnvs blockEnv outerEnv = modify (\(GenSt (_, _, tEnv) cnts blocks ret consts) ->
+    GenSt (blockEnv, outerEnv, tEnv) cnts blocks ret consts)
 
 
 setNewEnv :: IdentEnv -> GenM ()
-setNewEnv blockEnv = modify (\(GenSt _ oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sC) ->
-    GenSt blockEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sC)
+setNewEnv blockEnv = modify (\(GenSt (_, oEnv, tEnv) cnts blocks ret consts) ->
+        GenSt (blockEnv, oEnv, tEnv) cnts blocks ret consts)
 
 setTopOuterEnv :: IdentEnv -> GenM ()
-setTopOuterEnv tEnv = modify (\(GenSt bEnv _ _ iCnt rCnt lCnt cB bB sB fun fty funB sC) ->
-    GenSt bEnv tEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sC)
+setTopOuterEnv tEnv = modify (\(GenSt (bEnv, _, _) cnts blocks ret consts) ->
+            GenSt (bEnv, tEnv, tEnv) cnts blocks ret consts)
 
 
 -- Outside GenM
@@ -193,16 +216,16 @@ insertLocalDecl ident ty = do
 
 createStringConstant :: String -> GenM Addr
 createStringConstant str = do
-  uniqueIdent <- freshIdent stringIdent
+  uniqueIdent <- freshIdent emptyStringIdent
   let ty = TStrConst $ toInteger $ length str + 1
   let addr = AStr uniqueIdent ty
   addStringConstant $ SConst str addr
   return addr
 
 addStringConstant :: StringConst -> GenM ()
-addStringConstant sc = modify (\(GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB sConsts) ->
-      GenSt bEnv oEnv tEnv iCnt rCnt lCnt cB bB sB fun fty funB (sc : sConsts))
+addStringConstant sc = modify (\(GenSt envs cnts blocks ret consts) ->
+      GenSt envs cnts blocks ret (sc : consts))
 
 -- special identifier, cannot be created by a user
-stringIdent :: Ident
-stringIdent = Ident ""
+emptyStringIdent :: Ident
+emptyStringIdent = Ident ""

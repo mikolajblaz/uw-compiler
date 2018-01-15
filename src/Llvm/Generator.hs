@@ -46,7 +46,7 @@ processArgs [] = return []
 processArgs args = do
   Emitter.emitComment "copy argument values:"
   argAddrs <- mapM processArg args
-  Emitter.emitEmptyLine  -- TODO remove? from emitter too?
+  Emitter.emitEmptyLine
   return argAddrs
 
 -- | Update environment
@@ -78,7 +78,7 @@ processBlock (Block _ stmts) = do
   let endsRet = or endsRets
   return endsRet
 
-finishFunction :: GenM [Instr] -- TODO
+finishFunction :: GenM [Instr]
 finishFunction = do
   labelCnt <- gets labelCnt
   let funLabels = [0 .. labelCnt - 1]
@@ -166,6 +166,11 @@ genStmt (While _ cond bodyStmt) = do
   setCurrentBlock condLabel
   case (cond, endsRet) of
     (ELitTrue _, True) -> genJmp bodyLabel >> return True
+    (ELitTrue _, False) -> do
+                            afterLabel <- freshLabel
+                            genJmp bodyLabel
+                            setCurrentBlock afterLabel
+                            return False
     _ -> do
           afterLabel <- freshLabel
           genCond cond bodyLabel afterLabel
@@ -270,14 +275,18 @@ genRhs (ERel pos expr rel expr2) = do
   r <- freshRegister TBool
   let ty = getAddrType addr -- == getAddrType addr2 (thanks to type check)
   case ty of
-    TInt -> Emitter.emitCmp r rel 's' addr addr2
-    TBool -> Emitter.emitCmp r rel 'u' addr addr2
+    TInt -> Emitter.emitCmp r rel 's' addr addr2  >> return r
+    TBool -> Emitter.emitCmp r rel 'u' addr addr2 >> return r
     TStr -> do
               (_, _, funAddr) <- getIdentVal Nothing (Ident "compareStrings")
               Emitter.emitCall r funAddr [addr, addr2]
-              -- TODO negate if necessary
+              case rel of
+                EQU _ -> return r
+                NE _ -> do  -- negate the result
+                  r2 <- freshRegister TBool
+                  Emitter.emitBinOp "sub" r2 (AImm 1 TBool) r
+                  return r2
     _ -> failPos pos $ "Compiler error" -- this shouldn't happen after type check
-  return r
 
 -- remaining exps are EAnd and EOr, both handled the same way:
 genRhs e = do

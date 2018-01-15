@@ -27,6 +27,7 @@ lib/runtime.bc: lib/runtime.ll
 
 test: all
 	./test.sh tests/official/good/
+	./test.sh tests/my/good/
 
 clean:
 	-rm -f src/*.log src/*.aux src/*.hi src/*.o src/*.dvi

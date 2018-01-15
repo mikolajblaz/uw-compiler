@@ -16,7 +16,6 @@ type SBlock = [Instr]
 type Label = Integer
 
 -- address type
--- TODO include type information
 data Addr =
     AImm Integer TType        -- Constant
   | AReg Integer TType        -- Temporary Registers
@@ -26,7 +25,7 @@ data Addr =
   | AFun Ident TType          -- Functions (+ return type)
   | ALab Label                -- Block labels
 
-instance Show Addr where    -- TODO needed?
+instance Show Addr where
   show = printAddr
 
 printAddr :: Addr -> String
@@ -63,12 +62,6 @@ data StringConst = SConst String Addr
 -- Plain text instructions
 type Instr = String
 
--- Intermediate instructions (quadruple-code)
-data QInstr =   -- TODO
-    Store
-  | Load
-  deriving (Show)
-
 -------------------------- Types -------------------------------------------
 data TType = TInt | TStr | TBool | TVoid | TFun TType [TType] | TLab | TStrConst Integer
   deriving (Eq)
@@ -78,7 +71,7 @@ instance Show TType where
   show TStr = "i8*"
   show TBool = "i1"
   show TVoid = "void"
-  show (TFun ty _) = show ty -- TODO ?
+  show (TFun ty _) = show ty
   show TLab = "label"
   show (TStrConst len) = "[" ++ show len ++ " x i8]"
 
@@ -87,7 +80,7 @@ printLatte (Int _) = "int"
 printLatte (Str _) = "string"
 printLatte (Bool _) = "boolean"
 printLatte (Void _) = "void"
-printLatte (Fun _ ty _) = printLatte ty -- TODO ?
+printLatte (Fun _ ty _) = printLatte ty
 
 plainType :: Type Pos -> TType
 plainType (Int _) = TInt

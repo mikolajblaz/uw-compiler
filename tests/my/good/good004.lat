@@ -3,5 +3,34 @@ int main() {
   printString(s);
   printString(s);
   string ss;
+
+  cmp("ss", "ss");
+  cmp("ss", "s");
+  cmp("", "");
+  nonempty("nn");
+  nonempty("");
+
+  if ("sss" != "ss")
+    printString("D");
+  else
+    printString("E");
+
+  if ("sss" != "sss")
+    printString("D");
+  else
+    printString("E");
+
   return 1;
+}
+
+void cmp(string s, string s2) {
+  if (s == s2)
+    printString("equal");
+  else
+    printString("diff");
+}
+
+void nonempty(string s) {
+  if (s != "")
+    printString("nonempty");
 }
