@@ -1,10 +1,13 @@
 CC=ghc
 SRC=$(wildcard src/*.hs) $(wildcard src/Llvm/*.hs)
 LEX=src/ParLatte.hs src/LexLatte.hs
-BINS=latc_llvm
+BINS=latc_llvm latc
 RUNTIME=lib/runtime.bc
 
 all: $(LEX) $(BINS) $(RUNTIME)
+
+latc: latc_llvm
+	ln -s latc_llvm latc
 
 latc_llvm: $(LEX) $(SRC)
 	$(CC) -isrc --make src/Llvm/CompilerIO.hs -o latc_llvm

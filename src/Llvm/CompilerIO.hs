@@ -23,9 +23,8 @@ main = do
 
 
 handleError :: IOException -> IO a
-handleError e = do
-  let err = show e
-  hPutStrLn stderr $ "ERROR\n" ++ err
+handleError err = do
+  hPutStrLn stderr $ "ERROR\n" ++ show err
   exitFailure
 
 
@@ -47,6 +46,8 @@ processArgs args = do
   let bcFile = replaceExtension fileName ".bc"
   writeFile llFile output
 
+  hPutStrLn stderr $ "OK\n"
+
   -- assemble
   -- llvm-as -o in.bc in.ll
   asOutput <- readProcess "llvm-as" ["-o", bcFile, llFile] ""
@@ -57,7 +58,7 @@ processArgs args = do
   linkOutput <- readProcess "llvm-link" ["-o", bcFile, bcFile, "lib/runtime.bc"] ""
   putStr linkOutput
 
-  -- putStr output -- TODO remove
+
 
 
 fromErrToIO :: Err a -> IO a
