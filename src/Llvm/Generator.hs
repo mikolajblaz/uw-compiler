@@ -165,7 +165,6 @@ genStmt (CondElse _ cond thenStmt elseStmt) = do
 genStmt (While _ cond bodyStmt) = do
   bodyLabel <- freshLabel
   condLabel <- freshLabel
-  afterLabel <- freshLabel
 
   genJmp condLabel
 
@@ -176,10 +175,13 @@ genStmt (While _ cond bodyStmt) = do
   unless endsRet $ genJmp condLabel
 
   setCurrentBlock condLabel
-  genCond cond bodyLabel afterLabel
-
-  setCurrentBlock afterLabel
-  return False
+  case (cond, endsRet) of
+    (ELitTrue _, True) -> genJmp bodyLabel >> return True
+    _ -> do
+          afterLabel <- freshLabel
+          genCond cond bodyLabel afterLabel
+          setCurrentBlock afterLabel
+          return False
 
 
 genStmt (Ret _ expr) = do
