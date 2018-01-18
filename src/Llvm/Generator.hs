@@ -115,9 +115,9 @@ genStmt (SExp _ expr) = do
   _ <- genRhs expr
   return False
 
-genStmt (Ass _ ident expr) = do
+genStmt (Ass _ lhsExpr expr) = do
   rhsAddr <- genRhs expr
-  lhsAddr <- genLhs ident
+  lhsAddr <- genLhs lhsExpr
   Emitter.emitStore rhsAddr lhsAddr
   return False
 
@@ -187,15 +187,21 @@ genStmt (VRet _) = genVRet >> return True
 
 -- declarations
 -- process single declaration
+genStmt (Decl pos (Arr ty) [NoInit pos2 ident]) =
+  return -- TODO
+
 genStmt (Decl pos ty [NoInit pos2 ident]) = do
   genStmt (Decl pos ty [Init pos2 ident (defaultInit ty)])
+
+genStmt (Decl _ (Arr ty) [Init _ ident expr]) = do
+  return -- TODO
 
 genStmt (Decl _ ty [Init _ ident expr]) = do
   rhsAddr <- genRhs expr
   -- NOTE: here environment changes
   declAddr <- insertLocalDecl ident ty
   Emitter.emitAlloc declAddr
-  lhsAddr <- genLhs ident
+  lhsAddr <- genLhs (EVar Nothing ident)
   Emitter.emitStore rhsAddr lhsAddr
   return False
 
@@ -241,6 +247,21 @@ genRhs (EString _ str) = do
   r <- freshRegister TStr
   Emitter.emitConstToString r addr
   return r
+
+genRhs (ENewArray pos ty sizeExpr) = do
+  sAddr <- genRhs sizeExpr
+  r <- freshRegister (TArr (plainType ty)) -- TODO ?
+  Emitter.emitArrAlloc r sAddr
+  return r -- TODO ?
+
+genRhs e@(EArrayAcc pos arrExpr iExpr) = do
+  elemPtrAddr <- genLhs e
+  let TArr elemTy = getAddrType elemPtrAddr
+  elemAddr <- freshRegister elemTy
+  Emitter.emitArrLoad elemPtrAddr elemAddr
+  return elemAddr
+
+genRhs (ENull pos) = return AImm
 
 genRhs (Neg p expr) = genBinOp "sub" (ELitInt p 0) expr
 -- logical not is a substraction from True, when operating on 'i1' type
@@ -317,10 +338,27 @@ genBinOp opName expr expr2 = do
   return r
 
 
-genLhs :: Ident -> GenM Addr
-genLhs ident = do
+genLhs :: Expr Pos -> GenM Addr
+genLhs (EVar _ ident) = do
   (_, _, addr) <- getIdentVal Nothing ident
   return addr
+
+genLhs (EArrayAcc pos arrExpr iExpr) = do
+  indexAddr <- genRhs iExpr
+  arrAddr <- genRhs arrExpr
+  let TArr ty = getAddrType arrAddr
+  r <- genGetElem ty arrAddr indexAddr
+  return r
+
+genLhs e = fail "Compiler error" -- this shouldn't happen after typecheck
+
+
+-- getlementptr generator
+genGetElem :: TType -> Addr -> Addr -> GenM Addr
+genGetElem ty ptrAddr elemAddr = do
+  r <- freshRegister ty
+  Emitter.emitGetElement r ptrAddr [elemAddr] -- TODO
+  return r
 
 
 ------------------------- Conditions ----------------------------------------

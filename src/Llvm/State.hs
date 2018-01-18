@@ -82,6 +82,7 @@ getTypePos typos = case typos of
   Str pos -> pos
   Bool pos -> pos
   Void pos -> pos
+  Arr pos _ -> pos
   Fun pos _ _ -> pos
 
 -- Counters

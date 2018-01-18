@@ -306,6 +306,22 @@ analyzeExpr (EOr pos expr expr2) = do
                     e -> EOr pos e newExpr2
   return (finalExpr, Bool pos)
 
+analyzeExpr (ENewArray pos ty sizeExpr) = do
+  (newSizeExpr, sizeTy) <- analyzeExpr sizeExpr
+  checkEqual (getExprPos sizeExpr) (Int Nothing) sizeTy
+  return (ENewArray pos ty newSizeExpr, (Arr (getTypePos ty) ty))
+
+analyzeExpr (EArrayAcc pos arrExpr iExpr) = do
+  (newArrExpr, arrTy) <- analyzeExpr arrExpr
+  elemTy <- case arrTy of
+                  Arr _ ty -> return ty
+                  ty -> failPos pos $ "Cannot extract array element from type " ++ show ty
+
+  (newIndexExpr, indexTy) <- analyzeExpr iExpr
+  checkEqual (getExprPos iExpr) (Int Nothing) indexTy
+
+  return (EArrayAcc pos newArrExpr newIndexExpr, elemTy)
+
 
 -- Lhs
 analyzeLhs :: Expr Pos -> GenM (Type Pos)

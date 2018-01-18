@@ -41,14 +41,15 @@ import ErrM
   'if' { PT _ (TS _ 26) }
   'int' { PT _ (TS _ 27) }
   'new' { PT _ (TS _ 28) }
-  'return' { PT _ (TS _ 29) }
-  'string' { PT _ (TS _ 30) }
-  'true' { PT _ (TS _ 31) }
-  'void' { PT _ (TS _ 32) }
-  'while' { PT _ (TS _ 33) }
-  '{' { PT _ (TS _ 34) }
-  '||' { PT _ (TS _ 35) }
-  '}' { PT _ (TS _ 36) }
+  'null' { PT _ (TS _ 29) }
+  'return' { PT _ (TS _ 30) }
+  'string' { PT _ (TS _ 31) }
+  'true' { PT _ (TS _ 32) }
+  'void' { PT _ (TS _ 33) }
+  'while' { PT _ (TS _ 34) }
+  '{' { PT _ (TS _ 35) }
+  '||' { PT _ (TS _ 36) }
+  '}' { PT _ (TS _ 37) }
 
   L_ident {PT _ (TV _)}
   L_integ {PT _ (TI _)}

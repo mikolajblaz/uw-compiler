@@ -102,6 +102,19 @@ emitCommentStmt stmt = emitComment $ printTreeOneLine stmt
 emitEmptyLine :: GenM ()
 emitEmptyLine = emit $ ""
 
+-- Arrays
+
+emitArrAlloc :: Addr -> Addr -> GenM ()
+emitArrAlloc res sizeAddr = let (locName, ty) = split res in
+  emit $ locName ++ " = alloca " ++ show ty ++ ", " ++ printAddrTyped sizeAddr
+
+emitArrLoad :: Addr -> Addr -> GenM ()
+emitArrLoad = emitLoad -- TODO for now OK
+
+emitGetElement :: Addr -> Addr -> [Addr] -> GenM ()
+emitGetElement r ptrAddr elemAddrs = let (regName, rTy) = split r in emit $
+  regName ++ " = getelementptr inbounds " -- TODO
+
 ------------------------- Output (no state) ----------------------------------
 outputFunction :: TType -> Ident -> [Addr] -> [Instr] -> [Instr]
 outputFunction ty (Ident i) args body = header : (body ++ ["}", ""])

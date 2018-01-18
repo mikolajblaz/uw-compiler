@@ -24,6 +24,7 @@ data Addr =
   | AStr UniqueIdent TType    -- String constants
   | AFun Ident TType          -- Functions (+ return type)
   | ALab Label                -- Block labels
+  | AArr UniqueIdent TType
 
 instance Show Addr where
   show = printAddr
@@ -36,6 +37,7 @@ printAddr (AStr (UIdent _ num) _)   = "@str." ++ show num
 printAddr (AArg (UIdent var num) _) = "%arg." ++ var ++ "." ++ show num
 printAddr (AFun (Ident i) _) = "@" ++ i
 printAddr (ALab label) = "%L" ++ show label
+printAddr (AArr (UIdent var num) _) = "%arr." ++ var ++ "." ++ show num
 
 getAddrType :: Addr -> TType
 getAddrType (AImm _ ty) = ty
@@ -45,6 +47,7 @@ getAddrType (AStr _ ty) = ty
 getAddrType (AArg _ ty) = ty
 getAddrType (AFun _ ty) = ty
 getAddrType (ALab _) = TLab
+getAddrType (AArr _ ty) = ty
 
   ------------------------- Identifiers --------------------------------
 
@@ -114,6 +117,7 @@ defaultInit (Int pos) = ELitInt pos 0
 defaultInit (Bool pos) = ELitFalse pos
 defaultInit (Str pos) = EString pos ""
 -- TODO
+defaultInit (Arr pos ty) = undefined  -- this should not happen
 defaultInit (Void _) = undefined    -- this should not happen
 defaultInit (Fun _ _ _) = undefined -- this should not happen
 
