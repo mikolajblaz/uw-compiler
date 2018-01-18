@@ -138,23 +138,23 @@ analyzeStmt (SExp pos expr) = do
   (newExpr, exprTy) <- analyzeExpr expr
   return (SExp pos newExpr, False)
 
-analyzeStmt (Ass pos ident expr) = do
+analyzeStmt (Ass pos lhsExpr expr) = do
   (newExpr, exprTy) <- analyzeExpr expr
-  ty <- getIdentType pos ident
-  checkEqual (getExprPos expr) ty exprTy
-  return (Ass pos ident newExpr, False)
+  lhsTy <- analyzeLhs lhsExpr
+  checkEqual (getExprPos expr) lhsTy exprTy
+  return (Ass pos lhsExpr newExpr, False)
 
-analyzeStmt (Incr pos ident) = do
-  ty <- getIdentType pos ident
-  checkEqual pos (Int Nothing) ty
-  let identPlus1 = EAdd pos (EVar pos ident) (Plus pos) (ELitInt pos 1)
-  return (Ass pos ident identPlus1, False)
+analyzeStmt (Incr pos lhsExpr) = do
+  lhsTy <- analyzeLhs lhsExpr
+  checkEqual pos (Int Nothing) lhsTy
+  let identPlus1 = EAdd pos lhsExpr (Plus pos) (ELitInt pos 1)
+  return (Ass pos lhsExpr identPlus1, False)
 
-analyzeStmt (Decr pos ident) = do
-  ty <- getIdentType pos ident
-  checkEqual pos (Int Nothing) ty
-  let identMinus1 = EAdd pos (EVar pos ident) (Minus pos) (ELitInt pos 1)
-  return (Ass pos ident identMinus1, False)
+analyzeStmt (Decr pos lhsExpr) = do
+  lhsTy <- analyzeLhs lhsExpr
+  checkEqual pos (Int Nothing) lhsTy
+  let identMinus1 = EAdd pos lhsExpr (Minus pos) (ELitInt pos 1)
+  return (Ass pos lhsExpr identMinus1, False)
 
 analyzeStmt (Cond pos cond thenStmt) = do
   newCond <- analyzeCond cond
@@ -307,8 +307,23 @@ analyzeExpr (EOr pos expr expr2) = do
   return (finalExpr, Bool pos)
 
 
+-- Lhs
+analyzeLhs :: Expr Pos -> GenM (Type Pos)
+analyzeLhs (EVar pos ident) = getIdentType pos ident
+
+analyzeLhs (EArrayAcc pos arrExpr iExpr) = do
+  arrTy <- analyzeLhs arrExpr
+  case arrTy of
+    Arr _ ty -> return ty
+    ty -> failPos pos $ "Cannot extract array element from type " ++ show ty
+
+analyzeLhs expr = failPos (getExprPos expr) $ "Invalid left-hand-side expression."
+
+
 -- Helper
 getExprPos :: Expr Pos -> Pos
+getExprPos (ENewArray pos _ _) = pos
+getExprPos (EArrayAcc pos _ _) = pos
 getExprPos (EVar pos _) = pos
 getExprPos (ELitInt pos _) = pos
 getExprPos (ELitTrue pos) = pos

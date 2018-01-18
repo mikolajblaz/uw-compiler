@@ -10,3 +10,5 @@ src/LexLatte.hs
 lib/runtime.bc
 latc
 latc_llvm
+
+wysłane

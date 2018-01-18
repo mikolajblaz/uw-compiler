@@ -63,7 +63,15 @@ data StringConst = SConst String Addr
 type Instr = String
 
 -------------------------- Types -------------------------------------------
-data TType = TInt | TStr | TBool | TVoid | TFun TType [TType] | TLab | TStrConst Integer
+data TType =
+    TInt
+  | TStr
+  | TBool
+  | TVoid
+  | TArr TType
+  | TFun TType [TType]
+  | TLab
+  | TStrConst Integer
   deriving (Eq)
 
 instance Show TType where
@@ -71,6 +79,7 @@ instance Show TType where
   show TStr = "i8*"
   show TBool = "i1"
   show TVoid = "void"
+  show (TArr ty) = show ty ++ "*" -- TODO
   show (TFun ty _) = show ty
   show TLab = "label"
   show (TStrConst len) = "[" ++ show len ++ " x i8]"
@@ -80,6 +89,7 @@ printLatte (Int _) = "int"
 printLatte (Str _) = "string"
 printLatte (Bool _) = "boolean"
 printLatte (Void _) = "void"
+printLatte (Arr _ ty) = printLatte ty ++ "[]"
 printLatte (Fun _ ty _) = printLatte ty
 
 plainType :: Type Pos -> TType
@@ -87,6 +97,7 @@ plainType (Int _) = TInt
 plainType (Str _) = TStr
 plainType (Bool _) = TBool
 plainType (Void _) = TVoid
+plainType (Arr _ ty) = TArr $ plainType ty
 plainType (Fun _ ty tys) = TFun (plainType ty) $ map plainType tys
 
 -------------------------- Helpers -----------------------------------------
@@ -102,6 +113,7 @@ defaultInit :: Type Pos -> Expr Pos
 defaultInit (Int pos) = ELitInt pos 0
 defaultInit (Bool pos) = ELitFalse pos
 defaultInit (Str pos) = EString pos ""
+-- TODO
 defaultInit (Void _) = undefined    -- this should not happen
 defaultInit (Fun _ _ _) = undefined -- this should not happen
 
