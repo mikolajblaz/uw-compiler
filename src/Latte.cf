@@ -72,6 +72,9 @@ ENewArray. Expr6 ::= "new" Type "[" Expr "]" ;
 
 EArrayAcc. Expr6 ::= Expr6 "[" Expr "]" ;
 
+-- TODO remove internal
+internal   ENull.     Expr6 ::= "(" Type ")" "null" ;
+
 -- Original
 
 EVar.      Expr6 ::= Ident ;

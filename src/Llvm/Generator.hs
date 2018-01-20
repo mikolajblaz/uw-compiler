@@ -187,14 +187,8 @@ genStmt (VRet _) = genVRet >> return True
 
 -- declarations
 -- process single declaration
-genStmt (Decl pos (Arr ty) [NoInit pos2 ident]) =
-  return -- TODO
-
 genStmt (Decl pos ty [NoInit pos2 ident]) = do
   genStmt (Decl pos ty [Init pos2 ident (defaultInit ty)])
-
-genStmt (Decl _ (Arr ty) [Init _ ident expr]) = do
-  return -- TODO
 
 genStmt (Decl _ ty [Init _ ident expr]) = do
   rhsAddr <- genRhs expr
@@ -261,7 +255,7 @@ genRhs e@(EArrayAcc pos arrExpr iExpr) = do
   Emitter.emitArrLoad elemPtrAddr elemAddr
   return elemAddr
 
-genRhs (ENull pos) = return AImm
+genRhs (ENull pos ty) = return $ ANul (plainType ty)
 
 genRhs (Neg p expr) = genBinOp "sub" (ELitInt p 0) expr
 -- logical not is a substraction from True, when operating on 'i1' type

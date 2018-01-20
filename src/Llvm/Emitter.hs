@@ -109,11 +109,13 @@ emitArrAlloc res sizeAddr = let (locName, ty) = split res in
   emit $ locName ++ " = alloca " ++ show ty ++ ", " ++ printAddrTyped sizeAddr
 
 emitArrLoad :: Addr -> Addr -> GenM ()
-emitArrLoad = emitLoad -- TODO for now OK
+emitArrLoad src dest = let (destReg, destTy) = split dest in
+  emit $ destReg ++ " = load " ++ show destTy ++ ", " ++ printAddrTyped src
 
 emitGetElement :: Addr -> Addr -> [Addr] -> GenM ()
 emitGetElement r ptrAddr elemAddrs = let (regName, rTy) = split r in emit $
-  regName ++ " = getelementptr inbounds " -- TODO
+  regName ++ " = getelementptr inbounds " ++ show rTy ++ ", " ++
+    printAddrTyped ptrAddr ++ intercalate ", " (map printAddrTyped elemAddrs) -- TODO check
 
 ------------------------- Output (no state) ----------------------------------
 outputFunction :: TType -> Ident -> [Addr] -> [Instr] -> [Instr]

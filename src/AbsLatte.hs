@@ -88,7 +88,7 @@ instance Functor Type where
 data Expr a
     = ENewArray a (Type a) (Expr a)
     | EArrayAcc a (Expr a) (Expr a)
-    | ENull a
+    | ENull a (Type a)
     | EVar a Ident
     | ELitInt a Integer
     | ELitTrue a
@@ -108,7 +108,7 @@ instance Functor Expr where
     fmap f x = case x of
         ENewArray a type_ expr -> ENewArray (f a) (fmap f type_) (fmap f expr)
         EArrayAcc a expr1 expr2 -> EArrayAcc (f a) (fmap f expr1) (fmap f expr2)
-        ENull a -> ENull (f a)
+        ENull a type_ -> ENull (f a) (fmap f type_)
         EVar a ident -> EVar (f a) ident
         ELitInt a integer -> ELitInt (f a) integer
         ELitTrue a -> ELitTrue (f a)

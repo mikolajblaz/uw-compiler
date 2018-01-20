@@ -139,7 +139,7 @@ instance Print (Expr a) where
   prt i e = case e of
     ENewArray _ type_ expr -> prPrec i 6 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
     EArrayAcc _ expr1 expr2 -> prPrec i 6 (concatD [prt 6 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
-    ENull _ -> prPrec i 6 (concatD [doc (showString "null")])
+    ENull _ type_ -> prPrec i 6 (concatD [doc (showString "("), prt 0 type_, doc (showString ")"), doc (showString "null")])
     EVar _ id -> prPrec i 6 (concatD [prt 0 id])
     ELitInt _ n -> prPrec i 6 (concatD [prt 0 n])
     ELitTrue _ -> prPrec i 6 (concatD [doc (showString "true")])
