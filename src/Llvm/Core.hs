@@ -44,7 +44,7 @@ printAddr (ANul _) = "null"
 getAddrType :: Addr -> TType
 getAddrType (AImm _ ty) = ty
 getAddrType (AReg _ ty) = ty
-getAddrType (ALoc _ ty) = ty
+getAddrType (ALoc _ ty) = TPtr ty
 getAddrType (AStr _ ty) = ty
 getAddrType (AArg _ ty) = ty
 getAddrType (AFun _ ty) = ty
@@ -74,7 +74,7 @@ data TType =
   | TStr
   | TBool
   | TVoid
-  | TArr TType
+  | TPtr TType
   | TFun TType [TType]
   | TLab
   | TStrConst Integer
@@ -85,7 +85,7 @@ instance Show TType where
   show TStr = "i8*"
   show TBool = "i1"
   show TVoid = "void"
-  show (TArr ty) = show ty ++ "*" -- TODO
+  show (TPtr ty) = show ty ++ "*" -- TODO
   show (TFun ty _) = show ty
   show TLab = "label"
   show (TStrConst len) = "[" ++ show len ++ " x i8]"
@@ -103,7 +103,7 @@ plainType (Int _) = TInt
 plainType (Str _) = TStr
 plainType (Bool _) = TBool
 plainType (Void _) = TVoid
-plainType (Arr _ ty) = TArr $ plainType ty
+plainType (Arr _ ty) = TPtr $ plainType ty
 plainType (Fun _ ty tys) = TFun (plainType ty) $ map plainType tys
 
 -------------------------- Helpers -----------------------------------------
@@ -119,7 +119,7 @@ defaultInit :: Type Pos -> Expr Pos
 defaultInit (Int pos) = ELitInt pos 0
 defaultInit (Bool pos) = ELitFalse pos
 defaultInit (Str pos) = EString pos ""
-defaultInit (Arr pos ty) = ENull pos ty
+defaultInit (Arr pos ty) = ENull pos (Arr pos ty)
 defaultInit (Void _) = undefined    -- this should not happen
 defaultInit (Fun _ _ _) = undefined -- this should not happen
 

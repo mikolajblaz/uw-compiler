@@ -44,16 +44,16 @@ emitIndent indent instr = do
 --------- specific emitters, all of them use function emit ------------------
 
 emitAlloc :: Addr -> GenM ()
-emitAlloc a = let (locName, ty) = split a in
-  emit $ locName ++ " = alloca " ++ show ty
+emitAlloc a = let (locName, ty) = split a; TPtr elemTy = ty in
+  emit $ locName ++ " = alloca " ++ show elemTy
 
 emitLoad :: Addr -> Addr -> GenM ()
-emitLoad src dest = let (destReg, destTy) = split dest; (srcReg, srcTy) = split src;  in
-  emit $ destReg ++ " = load " ++ show destTy ++ ", " ++ show srcTy ++ "* " ++ srcReg
+emitLoad src dest = let (destReg, destTy) = split dest; (srcReg, srcTy) = split src; in
+  emit $ destReg ++ " = load " ++ show destTy ++ ", " ++ printAddrTyped src -- TODO show srcTy ++ "* " ++ srcReg
 
 emitStore :: Addr -> Addr -> GenM ()
 emitStore src dest = let (destReg, destTy) = split dest in
-  emit $ "store " ++ printAddrTyped src ++ ", " ++ show destTy ++ "* " ++ destReg
+  emit $ "store " ++ printAddrTyped src ++ ", " ++ printAddrTyped dest -- TODO show destTy ++ "* " ++ destReg
 
 emitBinOp :: String -> Addr -> Addr -> Addr -> GenM ()
 emitBinOp op r a1 a2 = let (regName, ty) = split r in
@@ -112,10 +112,10 @@ emitArrLoad :: Addr -> Addr -> GenM ()
 emitArrLoad src dest = let (destReg, destTy) = split dest in
   emit $ destReg ++ " = load " ++ show destTy ++ ", " ++ printAddrTyped src
 
-emitGetElement :: Addr -> Addr -> [Addr] -> GenM ()
-emitGetElement r ptrAddr elemAddrs = let (regName, rTy) = split r in emit $
-  regName ++ " = getelementptr inbounds " ++ show rTy ++ ", " ++
-    printAddrTyped ptrAddr ++ intercalate ", " (map printAddrTyped elemAddrs) -- TODO check
+emitGetElement :: TType -> Addr -> Addr -> [Addr] -> GenM ()
+emitGetElement baseTy res ptrAddr elemAddrs = emit $
+  printAddr res ++ " = getelementptr inbounds " ++ show baseTy ++ ", " ++
+    printAddrTyped ptrAddr ++ ", " ++ intercalate ", " (map printAddrTyped elemAddrs) -- TODO check
 
 ------------------------- Output (no state) ----------------------------------
 outputFunction :: TType -> Ident -> [Addr] -> [Instr] -> [Instr]
