@@ -116,6 +116,7 @@ instance Print (Stmt a) where
     CondElse _ expr stmt1 stmt2 -> prPrec i 0 (concatD [doc (showString "if"), doc (showString "("), prt 0 expr, doc (showString ")"), prt 0 stmt1, doc (showString "else"), prt 0 stmt2])
     While _ expr stmt -> prPrec i 0 (concatD [doc (showString "while"), doc (showString "("), prt 0 expr, doc (showString ")"), prt 0 stmt])
     SExp _ expr -> prPrec i 0 (concatD [prt 0 expr, doc (showString ";")])
+    For _ type_ id expr stmt -> prPrec i 0 (concatD [doc (showString "for"), doc (showString "("), prt 0 type_, prt 0 id, doc (showString ":"), prt 0 expr, doc (showString ")"), prt 0 stmt])
   prtList _ [] = (concatD [])
   prtList _ (x:xs) = (concatD [prt 0 x, prt 0 xs])
 instance Print (Item a) where
@@ -137,14 +138,15 @@ instance Print (Type a) where
   prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])
 instance Print (Expr a) where
   prt i e = case e of
+    EVar _ id -> prPrec i 8 (concatD [prt 0 id])
+    EArrayAcc _ expr1 expr2 -> prPrec i 8 (concatD [prt 8 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
+    EApp _ id exprs -> prPrec i 8 (concatD [prt 0 id, doc (showString "("), prt 0 exprs, doc (showString ")")])
+    EFieldAcc _ expr1 expr2 -> prPrec i 7 (concatD [prt 8 expr1, doc (showString "."), prt 7 expr2])
     ENewArray _ type_ expr -> prPrec i 6 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
-    EArrayAcc _ expr1 expr2 -> prPrec i 6 (concatD [prt 6 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
     ENull _ type_ -> prPrec i 6 (concatD [doc (showString "("), prt 0 type_, doc (showString ")"), doc (showString "null")])
-    EVar _ id -> prPrec i 6 (concatD [prt 0 id])
     ELitInt _ n -> prPrec i 6 (concatD [prt 0 n])
     ELitTrue _ -> prPrec i 6 (concatD [doc (showString "true")])
     ELitFalse _ -> prPrec i 6 (concatD [doc (showString "false")])
-    EApp _ id exprs -> prPrec i 6 (concatD [prt 0 id, doc (showString "("), prt 0 exprs, doc (showString ")")])
     EString _ str -> prPrec i 6 (concatD [prt 0 str])
     Neg _ expr -> prPrec i 5 (concatD [doc (showString "-"), prt 6 expr])
     Not _ expr -> prPrec i 5 (concatD [doc (showString "!"), prt 6 expr])

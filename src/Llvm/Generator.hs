@@ -62,6 +62,7 @@ processArg (Arg _ ty ident) = do
   return argAddr
 
 
+-- return a flag indicating presence of a return instruction
 processBlock :: Block Pos -> GenM Bool
 processBlock (Block _ []) = return False
 processBlock (Block _ stmts) = do
@@ -77,6 +78,7 @@ processBlock (Block _ stmts) = do
   -- if any instruction ends with ret, the block ends with ret also
   let endsRet = or endsRets
   return endsRet
+
 
 finishFunction :: GenM [Instr]
 finishFunction = do
@@ -205,8 +207,8 @@ genStmt (Decl pos ty items) = do
   mapM_ genStmt singleDecls
   return False
 
-
 -- these shouldn't happen after context analysis
+genStmt (For pos _ _ _ _) = failPos pos $ "Compiler error"
 genStmt (Incr pos _) = failPos pos $ "Compiler error"
 genStmt (Decr pos _) = failPos pos $ "Compiler error"
 
@@ -244,16 +246,19 @@ genRhs (EString _ str) = do
 
 genRhs (ENewArray pos ty sizeExpr) = do
   sAddr <- genRhs sizeExpr
-  r <- freshRegister (TArr (plainType ty)) -- TODO ?
+  r <- freshRegister $ TPtr (plainType ty)
   Emitter.emitArrAlloc r sAddr
-  return r -- TODO ?
+  return r
 
 genRhs e@(EArrayAcc pos arrExpr iExpr) = do
   elemPtrAddr <- genLhs e
-  let TArr elemTy = getAddrType elemPtrAddr
+  let TPtr elemTy = getAddrType elemPtrAddr
   elemAddr <- freshRegister elemTy
   Emitter.emitArrLoad elemPtrAddr elemAddr
   return elemAddr
+
+genRhs (EFieldAcc pos expr (EVar _ (Ident "length"))) = do
+  return $ AImm 10 TInt -- TODO
 
 genRhs (ENull pos ty) = return $ ANul (plainType ty)
 
@@ -301,10 +306,17 @@ genRhs (ERel pos expr rel expr2) = do
                   r2 <- freshRegister TBool
                   Emitter.emitBinOp "sub" r2 (AImm 1 TBool) r
                   return r2
+                _ -> failPos pos $ "Compiler error" -- this shouldn't happen after type check
     _ -> failPos pos $ "Compiler error" -- this shouldn't happen after type check
 
 -- remaining exps are EAnd and EOr, both handled the same way:
-genRhs e = do
+genRhs e@(EAnd _ _ _) = genAndOr e
+genRhs e@(EOr _ _ _) = genAndOr e
+
+genRhs _ = fail "Compiler error" -- this shouldn't happen
+
+genAndOr :: Expr Pos -> GenM Addr
+genAndOr e = do
   trueLabel <- freshLabel
   falseLabel <- freshLabel
   genCond e trueLabel falseLabel
@@ -340,18 +352,18 @@ genLhs (EVar _ ident) = do
 genLhs (EArrayAcc pos arrExpr iExpr) = do
   indexAddr <- genRhs iExpr
   arrAddr <- genRhs arrExpr
-  let TArr ty = getAddrType arrAddr
-  r <- genGetElem ty arrAddr indexAddr
+  let ptrTy@(TPtr ty) = getAddrType arrAddr
+  r <- genGetElem ptrTy ty arrAddr indexAddr
   return r
 
 genLhs e = fail "Compiler error" -- this shouldn't happen after typecheck
 
 
 -- getlementptr generator
-genGetElem :: TType -> Addr -> Addr -> GenM Addr
-genGetElem ty ptrAddr elemAddr = do
-  r <- freshRegister ty
-  Emitter.emitGetElement r ptrAddr [elemAddr] -- TODO
+genGetElem :: TType -> TType -> Addr -> Addr -> GenM Addr
+genGetElem retTy baseTy ptrAddr elemAddr = do
+  r <- freshRegister retTy
+  Emitter.emitGetElement baseTy r ptrAddr [elemAddr] -- TODO
   return r
 
 

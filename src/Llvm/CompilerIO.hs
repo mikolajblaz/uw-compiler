@@ -9,9 +9,6 @@ import qualified System.Directory as SD
 import System.IO
 import System.Process
 
-import AbsLatte
-import LexLatte
-import ParLatte
 import ErrM
 
 import qualified Llvm.Compiler as Compiler
@@ -45,6 +42,8 @@ processArgs args = do
   let llFile = replaceExtension fileName ".ll"
   let bcFile = replaceExtension fileName ".bc"
   writeFile llFile output
+
+  -- putStrLn output -- TODO remove
 
   hPutStrLn stderr $ "OK\n"
 

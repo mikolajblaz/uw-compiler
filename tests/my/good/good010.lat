@@ -1,0 +1,28 @@
+int main() {
+  int[] a = new int [4];
+  a[2] = 10;
+  a[3] = a[2];
+  int [] b = new int[3];
+  a[0] = 0;
+  a[1] = 1;
+  a[2] = a[1] + a[1 * 0] + 1;
+  printInt(a[0]);
+  printInt(a[1]);
+  printInt(a[2]);
+
+  for (int x: a) {
+    printInt(x);
+  }
+
+  string [] v = new string[3];
+  for (string v: v) {
+    printString("aaa");
+  }
+
+  int [] x = new int[2];
+  for (int x : x) {
+    printInt(7);
+    boolean x;
+  }
+  return 0;
+}

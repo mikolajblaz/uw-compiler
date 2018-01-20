@@ -110,3 +110,46 @@ i zwracają instrukcje w wyniku.
   W przypadku próby wczytania dłuższych linii, zachowanie jest niezdefiniowane.
 * Funkcja _readInt_ wczytuje liczbę oraz białe znaki występujące na wejściu
 po tej liczbie (m.in. znak '\n')
+
+
+# Rozszerzenia
+
+## Tablice
+Uwagi:
+* Tablice mogą być dowolnego wymiaru -- TODO
+* Zakresy tablic nie są sprawdzane, podobnie nie ma sprawdzenia czy rozmiar
+nowo tworzonej tablicy jest dodatni - nieprawidłowe pod tym względem operacje
+(np. new int[-1]) skutkują niezdefiniowanym zachowaniem.
+* Szczegóły konstrukcji `for (int x : a) stmt`:
+Zmienna `x` jest nowo zadeklarowaną zmienną i jej deklaracja obowiązuje
+wewnątrz instrukcji (bloku) `stmt`. Może być w nim przedefiniowana, podobnie
+zmienna `x` może występować na zewnątrz instrukcji `for`, a nawet może być
+użyta w wyrażeniu `a`, tzn. poprawny jest następujący kawałek kodu:
+```
+int [] x = new int[5];
+for (int x : x) {
+  printInt(x);
+  boolean x;
+}
+```
+
+Kontrukcja `for (type x : a) stmt` jest tłumaczona na etapie frontendu na:
+```
+{
+  type[] _arr = a;
+  int _i = 0;
+  type x;
+  while (_i < _arr.length) {
+    x = _arr[_i];
+    stmt;
+    _i++;
+  }
+}
+```
+Przy czym zmienne `_i` i `_arr` są niepoprawnymi zmiennymi Latte
+(ze względu na znak _ na początku).
+Dzięki temu zapewniona jest poprawność powyższej uwagi o widoczności zmiennych.
+
+## Struktury
+* Wskaźnik _null_ jest typowany, składnia: `(typ) null`.
+Jawne określenie typu dla wskaźnika jest możliwe (wymagane) tylko dla _null_.

@@ -39,6 +39,11 @@ checkEqual pos expTy ty =
     "Type error: got: " ++ printLatte ty ++ ", expected: " ++ printLatte expTy
 
 
+checkArrayType :: Pos -> Type Pos -> GenM (Type Pos)
+checkArrayType pos arrTy = case arrTy of
+                Arr _ ty -> return ty
+                ty -> failPos pos $ "Cannot extract array element from type " ++ show ty
+
 ------------------------ Analysis --------------------------------------------
 analyzeProgram :: Program Pos -> GenM (Program Pos)
 analyzeProgram (Program pos topDefs) = do
@@ -181,6 +186,28 @@ analyzeStmt (While pos cond bodyStmt) = do
     ELitFalse _ -> (Empty pos, False)
     _ -> (While pos newCond newBody, False)
 
+analyzeStmt (For pos ty ident arrExpr stmt) = do
+  (newArrExpr, arrTy) <- analyzeExpr arrExpr
+  elemTy <- checkArrayType pos arrTy
+  checkEqual pos elemTy ty
+
+  let index = Ident "_i"    -- '_i' is not a valid Latte variable name, so no conflict
+  let array = Ident "_arr"  -- '_arr' is not a valid Latte variable name, so no conflict
+  let whileCond = ERel pos (EVar pos index) (LTH pos) (EFieldAcc pos (EVar pos array) (EVar pos (Ident "length")))
+  let forAsWhile = BStmt pos $ Block pos [
+                      Decl pos arrTy [Init pos array newArrExpr],
+                      Decl pos (Int pos) [NoInit pos index],
+                      Decl pos ty [NoInit pos ident],
+                      While pos whileCond $ BStmt pos $ Block pos [
+                          Ass pos (EVar pos ident) (EArrayAcc pos (EVar pos array) (EVar pos index)),
+                          stmt,
+                          Incr pos (EVar pos index)
+                        ]
+                    ]
+
+  (newFor, _) <- analyzeStmt forAsWhile
+  return (newFor, False)
+
 analyzeStmt (Ret pos expr) = do
   (newExpr, exprTy) <- analyzeExpr expr
   retTy <- gets currentFunRetType
@@ -313,9 +340,7 @@ analyzeExpr (ENewArray pos ty sizeExpr) = do
 
 analyzeExpr (EArrayAcc pos arrExpr iExpr) = do
   (newArrExpr, arrTy) <- analyzeExpr arrExpr
-  elemTy <- case arrTy of
-                  Arr _ ty -> return ty
-                  ty -> failPos pos $ "Cannot extract array element from type " ++ show ty
+  elemTy <- checkArrayType pos arrTy
 
   (newIndexExpr, indexTy) <- analyzeExpr iExpr
   checkEqual (getExprPos iExpr) (Int Nothing) indexTy
@@ -323,15 +348,30 @@ analyzeExpr (EArrayAcc pos arrExpr iExpr) = do
   return (EArrayAcc pos newArrExpr newIndexExpr, elemTy)
 
 
+analyzeExpr (EFieldAcc pos expr fieldExpr) = do
+  (newExpr, exprTy) <- analyzeExpr expr
+  fieldTy <- analyzeFieldExpr exprTy fieldExpr
+  return (EFieldAcc pos newExpr fieldExpr, fieldTy)
+
+analyzeExpr e@(ENull _ ty) = return (e, ty)
+
+
+analyzeFieldExpr :: Type Pos -> Expr Pos -> GenM (Type Pos)
+analyzeFieldExpr (Arr pos _) fieldExpr = do
+  case fieldExpr of
+    EVar _ (Ident "length") -> return $ Int pos
+    EVar p _ -> failPos p $ "Arrays have only one field 'length'"
+    e -> failPos (getExprPos e) $ "Not a field expression"
+
+analyzeFieldExpr _ _ = fail "Structs not implemented"
+
 -- Lhs
 analyzeLhs :: Expr Pos -> GenM (Type Pos)
 analyzeLhs (EVar pos ident) = getIdentType pos ident
 
 analyzeLhs (EArrayAcc pos arrExpr iExpr) = do
   arrTy <- analyzeLhs arrExpr
-  case arrTy of
-    Arr _ ty -> return ty
-    ty -> failPos pos $ "Cannot extract array element from type " ++ show ty
+  checkArrayType pos arrTy
 
 analyzeLhs expr = failPos (getExprPos expr) $ "Invalid left-hand-side expression."
 
@@ -340,6 +380,8 @@ analyzeLhs expr = failPos (getExprPos expr) $ "Invalid left-hand-side expression
 getExprPos :: Expr Pos -> Pos
 getExprPos (ENewArray pos _ _) = pos
 getExprPos (EArrayAcc pos _ _) = pos
+getExprPos (EFieldAcc pos _ _) = pos
+getExprPos (ENull pos _) = pos
 getExprPos (EVar pos _) = pos
 getExprPos (ELitInt pos _) = pos
 getExprPos (ELitTrue pos) = pos

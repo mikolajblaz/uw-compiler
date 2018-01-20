@@ -1,0 +1,5 @@
+int main() {
+  boolean [] v = new boolean [0];
+  printInt(v.length);
+  return 0;
+}

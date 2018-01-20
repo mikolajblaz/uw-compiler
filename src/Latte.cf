@@ -48,6 +48,8 @@ While.     Stmt ::= "while" "(" Expr ")" Stmt ;
 
 SExp.      Stmt ::= Expr  ";" ;
 
+For.       Stmt ::= "for" "(" Type Ident ":" Expr ")" Stmt ;
+
 -- Types ---------------------------------------------------
 
 Int.       Type ::= "int" ;
@@ -68,24 +70,27 @@ separator  Type "," ;
 
 -- Added
 
-ENewArray. Expr6 ::= "new" Type "[" Expr "]" ;
+EVar.      Expr8 ::= Ident ;
 
-EArrayAcc. Expr6 ::= Expr6 "[" Expr "]" ;
+EArrayAcc. Expr8 ::= Expr8 "[" Expr "]" ;
+
+EApp.      Expr8 ::= Ident "(" [Expr] ")" ;
+
+EFieldAcc. Expr7 ::= Expr8 "." Expr7 ;
+
+ENewArray. Expr6 ::= "new" Type "[" Expr "]" ;
 
 -- TODO remove internal
 internal   ENull.     Expr6 ::= "(" Type ")" "null" ;
 
--- Original
 
-EVar.      Expr6 ::= Ident ;
+-- Original
 
 ELitInt.   Expr6 ::= Integer ;
 
 ELitTrue.  Expr6 ::= "true" ;
 
 ELitFalse. Expr6 ::= "false" ;
-
-EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
 
 EString.   Expr6 ::= String ;
 
@@ -103,7 +108,7 @@ EAnd.      Expr1 ::= Expr2 "&&" Expr1 ;
 
 EOr.       Expr ::= Expr1 "||" Expr ;
 
-coercions  Expr 6 ;
+coercions  Expr 8 ;
 
 separator  Expr "," ;
 

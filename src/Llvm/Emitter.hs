@@ -105,12 +105,11 @@ emitEmptyLine = emit $ ""
 -- Arrays
 
 emitArrAlloc :: Addr -> Addr -> GenM ()
-emitArrAlloc res sizeAddr = let (locName, ty) = split res in
-  emit $ locName ++ " = alloca " ++ show ty ++ ", " ++ printAddrTyped sizeAddr
+emitArrAlloc res sizeAddr = let (locName, ty) = split res; TPtr elemTy = ty in
+  emit $ locName ++ " = alloca " ++ show elemTy ++ ", " ++ printAddrTyped sizeAddr
 
 emitArrLoad :: Addr -> Addr -> GenM ()
-emitArrLoad src dest = let (destReg, destTy) = split dest in
-  emit $ destReg ++ " = load " ++ show destTy ++ ", " ++ printAddrTyped src
+emitArrLoad = emitLoad
 
 emitGetElement :: TType -> Addr -> Addr -> [Addr] -> GenM ()
 emitGetElement baseTy res ptrAddr elemAddrs = emit $

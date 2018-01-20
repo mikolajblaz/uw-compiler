@@ -16,6 +16,7 @@ import qualified Llvm.Generator as Generator
 import qualified Llvm.Frontend as Frontend
 import qualified Llvm.Emitter as Emitter
 
+import PrintLatte -- TODO remove
 
 runCompiler :: String -> Err String
 runCompiler input = do
