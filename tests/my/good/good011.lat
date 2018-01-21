@@ -1,0 +1,19 @@
+int main() {
+  int[] a = new int [4];
+  a[2] = 10;
+  a[3] = a[2];
+  a[0] = 0;
+  a[1] = 1;
+  a[2] = a[1] + a[1 * 0] + 1;
+  printInt(a[0]);
+  printInt(a[1]);
+  printInt(a[2]);
+
+  printInt(a.length);
+
+  for (int x: a) {
+    printInt(x);
+  }
+
+  return 0;
+}

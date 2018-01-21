@@ -3,7 +3,6 @@ module Llvm.Generator where
 import Control.Monad ( unless )
 import Control.Monad.Trans.State.Lazy
 import Data.List ( partition )
-import qualified Data.Map as Map
 
 import AbsLatte
 
@@ -253,20 +252,35 @@ genRhs (EString _ str) = do
   return r
 
 genRhs (ENewArray pos ty sizeExpr) = do
-  sAddr <- genRhs sizeExpr
-  r <- freshRegister $ TPtr (plainType ty)
-  Emitter.emitArrAlloc r sAddr
-  return r
+  let elemTy = plainType ty
+  sizeAddr <- genRhs sizeExpr
+  dataPtr <- freshRegister $ TPtr elemTy
+  Emitter.emitArrAlloc dataPtr sizeAddr
+
+  -- assign size and data values
+  let arrPtrTy = TPtr $ TArr elemTy
+  arrPtr <- freshRegister $ arrPtrTy
+  Emitter.emitAlloc arrPtr
+  sizePtr <- genGetElemPtr (TPtr TInt) arrPtr [AInd 0, AInd 0]
+  dataPtrPtr <- genGetElemPtr (TPtr (TPtr elemTy)) arrPtr [AInd 0, AInd 1]
+  Emitter.emitStore sizeAddr sizePtr
+  Emitter.emitStore dataPtr dataPtrPtr
+
+  return arrPtr
 
 genRhs e@(EArrayAcc pos arrExpr iExpr) = do
-  elemPtrAddr <- genLhs e
-  let TPtr elemTy = getAddrType elemPtrAddr
+  elemPtr <- genLhs e
+  let TPtr elemTy = getAddrType elemPtr
   elemAddr <- freshRegister elemTy
-  Emitter.emitArrLoad elemPtrAddr elemAddr
+  Emitter.emitArrLoad elemPtr elemAddr
   return elemAddr
 
-genRhs (EFieldAcc pos expr (EVar _ (Ident "length"))) = do
-  return $ AImm 10 TInt -- TODO
+genRhs (EFieldAcc pos arrExpr (EVar _ (Ident "length"))) = do
+  arrPtr <- genRhs arrExpr
+  sizePtr <- genGetElemPtr (TPtr TInt) arrPtr [AInd 0, AInd 0]
+  sizeAddr <- freshRegister TInt
+  Emitter.emitLoad sizePtr sizeAddr
+  return sizeAddr
 
 genRhs (ENull pos ty) = return $ ANul (plainType ty)
 
@@ -357,21 +371,27 @@ genLhs (EVar _ ident) = do
   (_, _, addr) <- getIdentVal Nothing ident
   return addr
 
+-- return pointer to the element
 genLhs (EArrayAcc pos arrExpr iExpr) = do
   indexAddr <- genRhs iExpr
-  arrAddr <- genRhs arrExpr
-  let ptrTy@(TPtr ty) = getAddrType arrAddr
-  r <- genGetElem ptrTy ty arrAddr indexAddr
-  return r
+  arrPtr <- genRhs arrExpr
+  let TPtr (TArr elemTy) = getAddrType arrPtr
+  dataPtrPtr <- genGetElemPtr (TPtr (TPtr elemTy)) arrPtr [AInd 0, AInd 1]
+  dataPtr <- freshRegister (TPtr elemTy)
+  Emitter.emitLoad dataPtrPtr dataPtr
+  genGetElemPtr (TPtr elemTy) dataPtr [indexAddr]
 
-genLhs e = fail "Compiler error" -- this shouldn't happen after typecheck
+genLhs (EFieldAcc pos arrExpr (EVar _ (Ident "length"))) = undefined -- TODO
+
+genLhs _ = fail "Compiler error" -- this shouldn't happen after typecheck
 
 
 -- getlementptr generator
-genGetElem :: TType -> TType -> Addr -> Addr -> GenM Addr
-genGetElem retTy baseTy ptrAddr elemAddr = do
+genGetElemPtr :: TType -> Addr -> [Addr] -> GenM Addr
+genGetElemPtr retTy ptrAddr elemAddrs = do
+  let TPtr baseTy = getAddrType ptrAddr
   r <- freshRegister retTy
-  Emitter.emitGetElement baseTy r ptrAddr [elemAddr] -- TODO
+  Emitter.emitGetElement baseTy r ptrAddr elemAddrs -- TODO
   return r
 
 

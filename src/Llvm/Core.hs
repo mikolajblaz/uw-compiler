@@ -24,7 +24,8 @@ data Addr =
   | AStr UniqueIdent TType    -- String constants
   | AFun Ident TType          -- Functions (+ return type)
   | ALab Label                -- Block labels
-  | AArr UniqueIdent TType
+  | AArr Addr Addr TType      -- {i32 sizeAddr, ty* dataAddr} -- TODO remove
+  | AInd Integer              -- index for getlementptr
   | ANul TType                -- null pointer of a given type
   -- TODO class addr
 
@@ -39,7 +40,8 @@ printAddr (AStr (UIdent _ num) _)   = "@str." ++ show num
 printAddr (AArg (UIdent var num) _) = "%arg." ++ var ++ "." ++ show num
 printAddr (AFun (Ident i) _) = "@" ++ i
 printAddr (ALab label) = "%L" ++ show label
-printAddr (AArr (UIdent var num) _) = "%arr." ++ var ++ "." ++ show num
+printAddr (AArr a1 a2 _) = "{" ++ printAddrTyped a1 ++ ", " ++ printAddrTyped a2 ++ "}"
+printAddr (AInd a) = show a
 printAddr (ANul _) = "null"
 
 getAddrType :: Addr -> TType
@@ -50,8 +52,16 @@ getAddrType (AStr _ ty) = ty
 getAddrType (AArg _ ty) = ty
 getAddrType (AFun _ ty) = ty
 getAddrType (ALab _) = TLab
-getAddrType (AArr _ ty) = ty
+getAddrType (AArr _ _ ty) = TArr ty
+getAddrType (AInd _) = TInt
 getAddrType (ANul ty) = ty
+
+printAddrTyped :: Addr -> String
+printAddrTyped addr = let (addrName, addrTy) = split addr in
+  show addrTy ++ " " ++ addrName
+
+split :: Addr -> (String, TType)
+split a = (printAddr a, getAddrType a)
 
   ------------------------- Identifiers --------------------------------
 
@@ -111,7 +121,7 @@ plainType (Int _) = TInt
 plainType (Str _) = TStr
 plainType (Bool _) = TBool
 plainType (Void _) = TVoid
-plainType (Arr _ ty) = TPtr $ plainType ty
+plainType (Arr _ ty) = TPtr $ TArr $ plainType ty
 plainType (Cls _ ident) = TCls ident
 plainType (Fun _ ty tys) = TFun (plainType ty) $ map plainType tys
 
@@ -119,7 +129,7 @@ plainType (Fun _ ty tys) = TFun (plainType ty) $ map plainType tys
 
 -------------------------- Classes -----------------------------------------
 data Class = Cl {
-  ty :: TType,
+  clsTy :: TType,
   attrs :: Map.Map Ident (Integer, TType) -- position, type
 }
   deriving (Show)
@@ -129,6 +139,7 @@ createClass name attrList = Cl (TCls name) $ Map.fromList enumeratedAttrs
   where
     enumeratedAttrs = zipWith (\i (ty, ident) -> (ident, (i, ty))) [0..] attrList
 
+-- TODO remove
 arrayClassName :: TType -> Ident
 arrayClassName elemTy = Ident $ "_array." ++ show elemTy
 

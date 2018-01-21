@@ -43,7 +43,7 @@ processArgs args = do
   let bcFile = replaceExtension fileName ".bc"
   writeFile llFile output
 
-  -- putStrLn output -- TODO remove
+  putStrLn output -- TODO remove
 
   hPutStrLn stderr $ "OK\n"
 

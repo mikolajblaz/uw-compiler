@@ -378,6 +378,7 @@ analyzeLhs (EArrayAcc pos arrExpr iExpr) = do
   arrTy <- analyzeLhs arrExpr
   checkArrayType pos arrTy
 
+-- TODO Field Acces
 analyzeLhs expr = failPos (getExprPos expr) $ "Invalid left-hand-side expression."
 
 

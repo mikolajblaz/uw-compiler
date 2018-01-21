@@ -15,13 +15,6 @@ import Llvm.State
 printLabelName :: Label -> String
 printLabelName label = "L" ++ show label
 
-printAddrTyped :: Addr -> String
-printAddrTyped addr = let (addrName, addrTy) = split addr in
-  show addrTy ++ " " ++ addrName
-
-split :: Addr -> (String, TType)
-split a = (printAddr a, getAddrType a)
-
 printRelOp :: RelOp Pos -> Char -> String
 printRelOp (LTH _) sign = sign : "lt"
 printRelOp (LE _) sign  = sign : "le"

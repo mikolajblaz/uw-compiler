@@ -256,3 +256,9 @@ checkTypeExists (Cls pos ident@(Ident i)) = do
     Nothing -> failPos pos $ "Type " ++ i ++ " does not exist"
     _ -> return ()
 checkTypeExists _ = return () -- other types just exist
+
+-- TODO remove
+failDebug :: String -> GenM a
+failDebug str = do
+  out <- gets (unlines . reverse . blockBuilder)
+  fail $ str ++ "\n" ++ out
