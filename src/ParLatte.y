@@ -36,23 +36,25 @@ import ErrM
   '>' { PT _ (TS _ 21) }
   '>=' { PT _ (TS _ 22) }
   '[' { PT _ (TS _ 23) }
-  ']' { PT _ (TS _ 24) }
-  'boolean' { PT _ (TS _ 25) }
-  'else' { PT _ (TS _ 26) }
-  'false' { PT _ (TS _ 27) }
-  'for' { PT _ (TS _ 28) }
-  'if' { PT _ (TS _ 29) }
-  'int' { PT _ (TS _ 30) }
-  'new' { PT _ (TS _ 31) }
-  'null' { PT _ (TS _ 32) }
-  'return' { PT _ (TS _ 33) }
-  'string' { PT _ (TS _ 34) }
-  'true' { PT _ (TS _ 35) }
-  'void' { PT _ (TS _ 36) }
-  'while' { PT _ (TS _ 37) }
-  '{' { PT _ (TS _ 38) }
-  '||' { PT _ (TS _ 39) }
-  '}' { PT _ (TS _ 40) }
+  '[]' { PT _ (TS _ 24) }
+  ']' { PT _ (TS _ 25) }
+  'boolean' { PT _ (TS _ 26) }
+  'class' { PT _ (TS _ 27) }
+  'else' { PT _ (TS _ 28) }
+  'false' { PT _ (TS _ 29) }
+  'for' { PT _ (TS _ 30) }
+  'if' { PT _ (TS _ 31) }
+  'int' { PT _ (TS _ 32) }
+  'new' { PT _ (TS _ 33) }
+  'null' { PT _ (TS _ 34) }
+  'return' { PT _ (TS _ 35) }
+  'string' { PT _ (TS _ 36) }
+  'true' { PT _ (TS _ 37) }
+  'void' { PT _ (TS _ 38) }
+  'while' { PT _ (TS _ 39) }
+  '{' { PT _ (TS _ 40) }
+  '||' { PT _ (TS _ 41) }
+  '}' { PT _ (TS _ 42) }
 
   L_ident {PT _ (TV _)}
   L_integ {PT _ (TI _)}
@@ -94,6 +96,9 @@ TopDef :: {
 : Type Ident '(' ListArg ')' Block {
   (fst $1, AbsLatte.FnDef (fst $1)(snd $1)(snd $2)(snd $4)(snd $6)) 
 }
+| 'class' Ident '{' ListAttr '}' {
+  (Just (tokenLineCol $1), AbsLatte.ClsDef (Just (tokenLineCol $1)) (snd $2)(snd $4)) 
+}
 
 ListTopDef :: {
   (Maybe (Int, Int), [TopDef (Maybe (Int, Int))]) 
@@ -122,6 +127,23 @@ ListArg :: {
   (fst $1, (:[]) (snd $1)) 
 }
 | Arg ',' ListArg {
+  (fst $1, (:) (snd $1)(snd $3)) 
+}
+
+Attr :: {
+  (Maybe (Int, Int), Attr (Maybe (Int, Int)))
+}
+: Type Ident {
+  (fst $1, AbsLatte.AttrDef (fst $1)(snd $1)(snd $2)) 
+}
+
+ListAttr :: {
+  (Maybe (Int, Int), [Attr (Maybe (Int, Int))]) 
+}
+: Attr {
+  (fst $1, (:[]) (snd $1)) 
+}
+| Attr ',' ListAttr {
   (fst $1, (:) (snd $1)(snd $3)) 
 }
 
@@ -220,8 +242,11 @@ Type :: {
 | 'void' {
   (Just (tokenLineCol $1), AbsLatte.Void (Just (tokenLineCol $1)))
 }
-| Type '[' ']' {
+| Type '[]' {
   (fst $1, AbsLatte.Arr (fst $1)(snd $1)) 
+}
+| Ident {
+  (fst $1, AbsLatte.Cls (fst $1)(snd $1)) 
 }
 
 ListType :: {
@@ -268,6 +293,9 @@ Expr6 :: {
 }
 : 'new' Type '[' Expr ']' {
   (Just (tokenLineCol $1), AbsLatte.ENewArray (Just (tokenLineCol $1)) (snd $2)(snd $4)) 
+}
+| 'new' Type {
+  (Just (tokenLineCol $1), AbsLatte.ENewObj (Just (tokenLineCol $1)) (snd $2)) 
 }
 | Integer {
   (fst $1, AbsLatte.ELitInt (fst $1)(snd $1)) 

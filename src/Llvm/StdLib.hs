@@ -27,3 +27,11 @@ printLibraryDeclarations = [
     "declare " ++ show TBool ++ " @compareStrings(" ++ show TStr ++ ", " ++ show TStr ++ ")",
     ""
   ]
+
+libraryClasses :: [TopDef Pos]
+libraryClasses = let n = Nothing in []
+
+printLibraryClasses :: [Instr]
+printLibraryClasses = [
+    "%_array = type {i32, i64*}"
+  ]

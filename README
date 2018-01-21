@@ -151,5 +151,6 @@ Przy czym zmienne `_i` i `_arr` są niepoprawnymi zmiennymi Latte
 Dzięki temu zapewniona jest poprawność powyższej uwagi o widoczności zmiennych.
 
 ## Struktury
+* Definicje wszstkich klas muszą pojawić się przed definicjami funkcji.
 * Wskaźnik _null_ jest typowany, składnia: `(typ) null`.
 Jawne określenie typu dla wskaźnika jest możliwe (wymagane) tylko dla _null_.

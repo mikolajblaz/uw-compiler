@@ -14,18 +14,27 @@ data Program a = Program a [TopDef a]
 instance Functor Program where
     fmap f x = case x of
         Program a topdefs -> Program (f a) (map (fmap f) topdefs)
-data TopDef a = FnDef a (Type a) Ident [Arg a] (Block a)
+data TopDef a
+    = FnDef a (Type a) Ident [Arg a] (Block a)
+    | ClsDef a Ident [Attr a]
   deriving (Eq, Ord, Show, Read)
 
 instance Functor TopDef where
     fmap f x = case x of
         FnDef a type_ ident args block -> FnDef (f a) (fmap f type_) ident (map (fmap f) args) (fmap f block)
+        ClsDef a ident attrs -> ClsDef (f a) ident (map (fmap f) attrs)
 data Arg a = Arg a (Type a) Ident
   deriving (Eq, Ord, Show, Read)
 
 instance Functor Arg where
     fmap f x = case x of
         Arg a type_ ident -> Arg (f a) (fmap f type_) ident
+data Attr a = AttrDef a (Type a) Ident
+  deriving (Eq, Ord, Show, Read)
+
+instance Functor Attr where
+    fmap f x = case x of
+        AttrDef a type_ ident -> AttrDef (f a) (fmap f type_) ident
 data Block a = Block a [Stmt a]
   deriving (Eq, Ord, Show, Read)
 
@@ -76,6 +85,7 @@ data Type a
     | Bool a
     | Void a
     | Arr a (Type a)
+    | Cls a Ident
     | Fun a (Type a) [Type a]
   deriving (Eq, Ord, Show, Read)
 
@@ -86,6 +96,7 @@ instance Functor Type where
         Bool a -> Bool (f a)
         Void a -> Void (f a)
         Arr a type_ -> Arr (f a) (fmap f type_)
+        Cls a ident -> Cls (f a) ident
         Fun a type_ types -> Fun (f a) (fmap f type_) (map (fmap f) types)
 data Expr a
     = EVar a Ident
@@ -93,6 +104,7 @@ data Expr a
     | EApp a Ident [Expr a]
     | EFieldAcc a (Expr a) (Expr a)
     | ENewArray a (Type a) (Expr a)
+    | ENewObj a (Type a)
     | ENull a (Type a)
     | ELitInt a Integer
     | ELitTrue a
@@ -114,6 +126,7 @@ instance Functor Expr where
         EApp a ident exprs -> EApp (f a) ident (map (fmap f) exprs)
         EFieldAcc a expr1 expr2 -> EFieldAcc (f a) (fmap f expr1) (fmap f expr2)
         ENewArray a type_ expr -> ENewArray (f a) (fmap f type_) (fmap f expr)
+        ENewObj a type_ -> ENewObj (f a) (fmap f type_)
         ENull a type_ -> ENull (f a) (fmap f type_)
         ELitInt a integer -> ELitInt (f a) integer
         ELitTrue a -> ELitTrue (f a)

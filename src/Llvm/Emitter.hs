@@ -114,9 +114,13 @@ emitArrLoad = emitLoad
 emitGetElement :: TType -> Addr -> Addr -> [Addr] -> GenM ()
 emitGetElement baseTy res ptrAddr elemAddrs = emit $
   printAddr res ++ " = getelementptr inbounds " ++ show baseTy ++ ", " ++
-    printAddrTyped ptrAddr ++ ", " ++ intercalate ", " (map printAddrTyped elemAddrs) -- TODO check
+    printAddrTyped ptrAddr ++ ", " ++ intercalate ", " (map printAddrTyped elemAddrs)
 
 ------------------------- Output (no state) ----------------------------------
+-- Types
+outputTypeDef :: String -> [TType] -> Instr
+outputTypeDef tyName tys = "%" ++ tyName ++ " = type {" ++ intercalate ", " (map show tys) ++ "}"
+
 outputFunction :: TType -> Ident -> [Addr] -> [Instr] -> [Instr]
 outputFunction ty (Ident i) args body = header : (body ++ ["}", ""])
   where

@@ -26,6 +26,7 @@ data Addr =
   | ALab Label                -- Block labels
   | AArr UniqueIdent TType
   | ANul TType                -- null pointer of a given type
+  -- TODO class addr
 
 instance Show Addr where
   show = printAddr
@@ -61,6 +62,8 @@ type EnvVal = (Type Pos, UniqueIdent, Addr)
   -- | Identifiers environment
 type IdentEnv = Map.Map Ident EnvVal
 
+type ClassEnv = Map.Map Ident Class
+
 data StringConst = SConst String Addr
   deriving (Show)
 
@@ -78,6 +81,7 @@ data TType =
   | TFun TType [TType]
   | TLab
   | TStrConst Integer
+  | TCls Ident
   deriving (Eq)
 
 instance Show TType where
@@ -89,6 +93,7 @@ instance Show TType where
   show (TFun ty _) = show ty
   show TLab = "label"
   show (TStrConst len) = "[" ++ show len ++ " x i8]"
+  show (TCls (Ident i)) = i
 
 printLatte :: Type Pos -> String
 printLatte (Int _) = "int"
@@ -96,6 +101,7 @@ printLatte (Str _) = "string"
 printLatte (Bool _) = "boolean"
 printLatte (Void _) = "void"
 printLatte (Arr _ ty) = printLatte ty ++ "[]"
+printLatte (Cls _ (Ident i)) = i
 printLatte (Fun _ ty _) = printLatte ty
 
 plainType :: Type Pos -> TType
@@ -104,7 +110,31 @@ plainType (Str _) = TStr
 plainType (Bool _) = TBool
 plainType (Void _) = TVoid
 plainType (Arr _ ty) = TPtr $ plainType ty
+plainType (Cls _ ident) = TCls ident
 plainType (Fun _ ty tys) = TFun (plainType ty) $ map plainType tys
+
+
+
+-------------------------- Classes -----------------------------------------
+data Class = Cl {
+  name :: Ident,
+  attrs :: Map.Map Ident (Integer, TType) -- position, type
+}
+  deriving (Show)
+
+createClass :: Ident -> [(TType, Ident)] -> Class
+createClass name attrList = Cl name $ Map.fromList enumeratedAttrs
+  where
+    enumeratedAttrs = zipWith (\i (ty, ident) -> (ident, (i, ty))) [0..] attrList
+
+arrayClassName :: TType -> Ident
+arrayClassName elemTy = Ident $ "_array." ++ show elemTy
+
+arrayClass :: TType -> Class
+arrayClass elemTy = createClass (arrayClassName elemTy) [
+    (TPtr elemTy, Ident "_data"),
+    (TInt, Ident "length")
+  ]
 
 -------------------------- Helpers -----------------------------------------
 failPos :: (Monad m) => Pos -> String -> m c
@@ -130,3 +160,7 @@ printTreeOneLine :: Print a => a -> String
 printTreeOneLine tree = oneLiner $ printTree tree
   where
     oneLiner str = [if ch /= '\n' then ch else ' ' | ch <- str]
+
+isFnDef :: TopDef Pos -> Bool
+isFnDef (FnDef _ _ _ _ _) = True
+isFnDef _ = False

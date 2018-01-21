@@ -2,6 +2,7 @@ module Llvm.Frontend (analyzeProgram) where
 
 import Control.Monad ( liftM, unless )
 import Control.Monad.Trans.State.Lazy
+import Data.List ( partition )
 import qualified Data.Map as Map
 
 import Llvm.Core
@@ -47,7 +48,9 @@ checkArrayType pos arrTy = case arrTy of
 ------------------------ Analysis --------------------------------------------
 analyzeProgram :: Program Pos -> GenM (Program Pos)
 analyzeProgram (Program pos topDefs) = do
-  buildTopEnv (Lib.libraryTopDefs ++ topDefs)
+  let (fnDefs, clsDefs) = partition isFnDef topDefs
+  buildTopEnv (Lib.libraryTopDefs ++ fnDefs)
+  buildClassEnv clsDefs
   checkMain
   -- NOTE: we don't analyze libraryTopDefs, we just put it to topEnv
   newTopDefs <- mapM analyzeTopDef topDefs
@@ -70,6 +73,8 @@ analyzeTopDef (FnDef pos ty ident@(Ident i) args block) = do
       else newStmts ++ [VRet Nothing]
 
   return $ FnDef pos ty ident args (Block pos finalStmts)
+
+analyzeTopDef d = return d
 
 
 analyzeArgs :: [Arg Pos] -> GenM ()

@@ -2,6 +2,7 @@ module Llvm.Generator where
 
 import Control.Monad ( unless )
 import Control.Monad.Trans.State.Lazy
+import Data.List ( partition )
 import qualified Data.Map as Map
 
 import AbsLatte
@@ -14,18 +15,27 @@ import qualified Llvm.StdLib as Lib
 
 processProgram :: Program Pos -> GenM String
 processProgram (Program _ topDefs) = do
+  let (fnDefs, clsDefs) = partition isFnDef topDefs
   buildTopEnv (Lib.libraryTopDefs ++ topDefs)
+  buildClassEnv clsDefs
   let libraryOutput = Lib.printLibraryDeclarations
   -- NOTE: we don't process libraryTopDefs, we just put it to topEnv
-  funOuts <- mapM processTopDef topDefs
+  classOuts <- mapM processClassDef clsDefs
+  funOuts <- mapM processFnDef fnDefs
 
   constants <- gets sConsts >>= (return . Emitter.outputStringConstants)
-  return $ unlines $ libraryOutput ++ constants ++ (concat funOuts)
+  return $ unlines $ libraryOutput ++ constants ++ (concat (classOuts ++ funOuts))
 
+
+processClassDef :: TopDef Pos -> GenM [Instr]
+processClassDef (ClsDef _ (Ident name) attrs) = return $
+  [Emitter.outputTypeDef name (map (\(AttrDef _ ty _) -> plainType ty) attrs)]
+
+processClassDef _ = return []
 
 -- | Return instructions in proper order
-processTopDef :: TopDef Pos -> GenM [Instr]
-processTopDef (FnDef _ ty ident args block) = do
+processFnDef :: TopDef Pos -> GenM [Instr]
+processFnDef (FnDef _ ty ident args block) = do
   startNewFun ident ty
   -- outer env is now set
 
@@ -40,6 +50,8 @@ processTopDef (FnDef _ ty ident args block) = do
 
   let funOut = Emitter.outputFunction (plainType ty) ident argsAddrs funBody
   return funOut
+
+processFnDef _ = return []
 
 processArgs :: [Arg Pos] -> GenM [Addr]
 processArgs [] = return []

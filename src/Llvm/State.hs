@@ -21,13 +21,13 @@ emptyEnv :: IdentEnv
 emptyEnv = Map.empty
 
 initState :: GenState
-initState = GenSt (Map.empty, Map.empty, Map.empty) (0, 0, 0)
+initState = GenSt (Map.empty, Map.empty, Map.empty, Map.empty) (0, 0, 0)
               (0, [], Map.empty, [], Map.empty) (Void Nothing) []
 
 -- | Compiler state
 data GenState = GenSt {
   -- blockEnv, outerEnv, topEnv, see below
-  envs :: (IdentEnv, IdentEnv, IdentEnv),
+  envs :: (IdentEnv, IdentEnv, IdentEnv, ClassEnv),
   -- identCnt, regCnt, labelCnt, see below
   counters :: (Counter, Counter, Counter),
 
@@ -46,20 +46,17 @@ data GenState = GenSt {
 
 -- GenSt envs cnts blocksDesc ret consts
 
-first, second, third :: (a, a, a) -> a
-first (a, _, _) = a
-second (_, b, _) = b
-third (_, _, c) = c
-
 blockEnv, outerEnv, topEnv :: GenState -> IdentEnv
-blockEnv = first  . envs
-outerEnv = second . envs
-topEnv   = third  . envs
+blockEnv = (\(a, _, _, _) -> a) . envs
+outerEnv = (\(_, b, _, _) -> b) . envs
+topEnv   = (\(_, _, c, _) -> c) . envs
+classEnv :: GenState -> ClassEnv
+classEnv = (\(_, _, _, d) -> d) . envs
 
 identCnt, regCnt, labelCnt :: GenState -> Counter
-identCnt = first  . counters
-regCnt   = second . counters
-labelCnt = third  . counters
+identCnt = (\(a, _, _) -> a) . counters
+regCnt   = (\(_, b, _) -> b) . counters
+labelCnt = (\(_, _, c) -> c) . counters
 
 currBlock :: GenState -> Label
 currBlock    = (\(a, _, _, _, _) -> a) . blocksDesc
@@ -157,11 +154,10 @@ finishBlock = do
 -- TopEnv
 startNewFun :: Ident -> Type Pos -> GenM ()
 startNewFun ident ty = do
-  GenSt (_, _, tEnv) (iCnt, _, _) _ _ sConsts <- get
+  GenSt (_, _, tEnv, cEnv) (iCnt, _, _) _ _ sConsts <- get
   put $ initState
-  setTopOuterEnv tEnv
-  modify (\(GenSt envs (_, rCnt, lCnt) blocks _  _) ->
-    GenSt envs (iCnt, rCnt, lCnt) blocks ty sConsts)
+  modify (\(GenSt (bEnv, _, _, _) (_, rCnt, lCnt) blocks _  _) ->
+    GenSt (bEnv, tEnv, tEnv, cEnv) (iCnt, rCnt, lCnt) blocks ty sConsts)
 
 buildTopEnv :: [TopDef Pos] -> GenM ()
 buildTopEnv defs = do
@@ -173,21 +169,38 @@ insertTopDef (FnDef pos ty ident args _) topEnv = do
   let funType = Fun pos ty (map getArgType args)
   insertUniqueNewIdent ident funType (AFun ident (plainType funType)) topEnv
 
+------------------------ Classes -----------------------------------------
+buildClassEnv :: [TopDef Pos] -> GenM ()
+buildClassEnv defs = do
+  clsEnv <- foldM (flip insertClassDef) Map.empty defs
+  setClsEnv clsEnv
+
+insertClassDef :: TopDef Pos -> ClassEnv -> GenM ClassEnv
+insertClassDef (ClsDef pos ident@(Ident i) attrs) clsEnv =
+  case Map.lookup ident clsEnv of
+    Just _ -> failPos pos $ "Class " ++ i ++ " already declared"
+    Nothing -> return $ Map.insert ident (createClass ident attrList) clsEnv
+      where
+        attrList = (map (\(AttrDef _ ty ident) -> (plainType ty, ident)) attrs)
+
 ------------------- Operations on identifiers environment -----------------
 
 setNewEnvs :: IdentEnv -> IdentEnv -> GenM ()
-setNewEnvs blockEnv outerEnv = modify (\(GenSt (_, _, tEnv) cnts blocks ret consts) ->
-    GenSt (blockEnv, outerEnv, tEnv) cnts blocks ret consts)
+setNewEnvs blockEnv outerEnv = modify (\(GenSt (_, _, tEnv, cEnv) cnts blocks ret consts) ->
+    GenSt (blockEnv, outerEnv, tEnv, cEnv) cnts blocks ret consts)
 
 
 setNewEnv :: IdentEnv -> GenM ()
-setNewEnv blockEnv = modify (\(GenSt (_, oEnv, tEnv) cnts blocks ret consts) ->
-        GenSt (blockEnv, oEnv, tEnv) cnts blocks ret consts)
+setNewEnv blockEnv = modify (\(GenSt (_, oEnv, tEnv, cEnv) cnts blocks ret consts) ->
+        GenSt (blockEnv, oEnv, tEnv, cEnv) cnts blocks ret consts)
 
 setTopOuterEnv :: IdentEnv -> GenM ()
-setTopOuterEnv tEnv = modify (\(GenSt (bEnv, _, _) cnts blocks ret consts) ->
-            GenSt (bEnv, tEnv, tEnv) cnts blocks ret consts)
+setTopOuterEnv tEnv = modify (\(GenSt (bEnv, _, _, cEnv) cnts blocks ret consts) ->
+            GenSt (bEnv, tEnv, tEnv, cEnv) cnts blocks ret consts)
 
+setClsEnv :: ClassEnv -> GenM ()
+setClsEnv clsEnv = modify (\(GenSt (bEnv, oEnv, tEnv, _) cnts blocks ret consts) ->
+        GenSt (bEnv, oEnv, tEnv, clsEnv) cnts blocks ret consts)
 
 -- Outside GenM
 -- | Insert block environment to outer environment.
@@ -208,6 +221,7 @@ insertUniqueNewIdent ident ty addr env = do
 
 insertLocalDecl :: Ident -> (Type Pos) -> GenM Addr
 insertLocalDecl ident ty = do
+  checkTypeExists ty
   uniqueIdent <- freshIdent ident
   let identAddr = ALoc uniqueIdent $ plainType ty
   blockEnv <- gets blockEnv
@@ -230,3 +244,8 @@ addStringConstant sc = modify (\(GenSt envs cnts blocks ret consts) ->
 -- special identifier, cannot be created by a user
 emptyStringIdent :: Ident
 emptyStringIdent = Ident ""
+
+checkTypeExists :: Type Pos -> GenM ()
+checkTypeExists (Cls _ ident) = return () -- TODO
+checkTypeExists _ = return () -- other types just exist
+-- TODO arrays can be created here on demand!
