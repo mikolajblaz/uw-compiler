@@ -6,11 +6,17 @@ Program.   Program ::= [TopDef] ;
 
 FnDef.	   TopDef ::= Type Ident "(" [Arg] ")" Block ;
 
+ClsDef.    TopDef ::= "class" Ident "{" [Attr] "}" ;
+
 separator nonempty TopDef "" ;
 
-Arg. 	   Arg ::= Type Ident;
+Arg. 	     Arg ::= Type Ident;
 
 separator  Arg "," ;
+
+AttrDef.   Attr ::= Type Ident ;
+
+separator nonempty Attr "," ;
 
 -- statements ----------------------------------------------
 
@@ -60,7 +66,9 @@ Bool.      Type ::= "boolean" ;
 
 Void.      Type ::= "void" ;
 
-Arr.   Type ::= Type "[" "]" ;
+Arr.       Type ::= Type "[]" ;
+
+Cls.       Type ::= Ident ;
 
 internal   Fun. Type ::= Type "(" [Type] ")" ;
 
@@ -79,6 +87,8 @@ EApp.      Expr8 ::= Ident "(" [Expr] ")" ;
 EFieldAcc. Expr7 ::= Expr8 "." Expr7 ;
 
 ENewArray. Expr6 ::= "new" Type "[" Expr "]" ;
+
+ENewObj.   Expr6 ::= "new" Type ; -- TODO
 
 -- TODO remove internal
 internal   ENull.     Expr6 ::= "(" Type ")" "null" ;
