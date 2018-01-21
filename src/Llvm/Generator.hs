@@ -20,22 +20,20 @@ processProgram (Program _ topDefs) = do
   buildClassEnv clsDefs
   let libraryOutput = Lib.printLibraryDeclarations
   -- NOTE: we don't process libraryTopDefs, we just put it to topEnv
-  classOuts <- mapM processClassDef clsDefs
-  funOuts <- mapM processFnDef fnDefs
+  classOuts <- mapM processTopDef clsDefs
+  funOuts <- mapM processTopDef fnDefs
 
   constants <- gets sConsts >>= (return . Emitter.outputStringConstants)
   return $ unlines $ libraryOutput ++ constants ++ (concat (classOuts ++ funOuts))
 
 
-processClassDef :: TopDef Pos -> GenM [Instr]
-processClassDef (ClsDef _ (Ident name) attrs) = return $
-  [Emitter.outputTypeDef name (map (\(AttrDef _ ty _) -> plainType ty) attrs)]
-
-processClassDef _ = return []
-
 -- | Return instructions in proper order
-processFnDef :: TopDef Pos -> GenM [Instr]
-processFnDef (FnDef _ ty ident args block) = do
+processTopDef :: TopDef Pos -> GenM [Instr]
+processTopDef (ClsDef _ ident attrs) = do
+  Cl ty _ <- getClassDesc ident
+  return $ [Emitter.outputTypeDef ty (map (\(AttrDef _ ty _) -> plainType ty) attrs)]
+
+processTopDef (FnDef _ ty ident args block) = do
   startNewFun ident ty
   -- outer env is now set
 
@@ -50,8 +48,6 @@ processFnDef (FnDef _ ty ident args block) = do
 
   let funOut = Emitter.outputFunction (plainType ty) ident argsAddrs funBody
   return funOut
-
-processFnDef _ = return []
 
 processArgs :: [Arg Pos] -> GenM [Addr]
 processArgs [] = return []

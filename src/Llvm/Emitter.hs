@@ -118,8 +118,8 @@ emitGetElement baseTy res ptrAddr elemAddrs = emit $
 
 ------------------------- Output (no state) ----------------------------------
 -- Types
-outputTypeDef :: String -> [TType] -> Instr
-outputTypeDef tyName tys = "%" ++ tyName ++ " = type {" ++ intercalate ", " (map show tys) ++ "}"
+outputTypeDef :: TType -> [TType] -> Instr
+outputTypeDef clsTy tys = show clsTy ++ " = type {" ++ intercalate ", " (map show tys) ++ "}"
 
 outputFunction :: TType -> Ident -> [Addr] -> [Instr] -> [Instr]
 outputFunction ty (Ident i) args body = header : (body ++ ["}", ""])

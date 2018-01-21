@@ -4,6 +4,7 @@ import Control.Monad ( foldM )
 import Control.Monad.Trans.State.Lazy
 import Data.List ( nub )
 import qualified Data.Map as Map
+import Data.Maybe ( fromJust )
 
 import Llvm.Core
 
@@ -117,14 +118,6 @@ freshIdent (Ident ident) = do
   identCnt <- state incIdentCnt
   return $ UIdent ident identCnt
 
---  Blocks
-freshLabel :: GenM Label
-freshLabel = state incLabelCnt
-
-setCurrentBlock :: Label -> GenM ()
-setCurrentBlock label = modify (setBlock label)
-
-
 getIdentVal :: Pos -> Ident -> GenM EnvVal
 getIdentVal pos ident@(Ident i) = do
   bEnv <- gets blockEnv
@@ -141,6 +134,13 @@ getIdentType :: Pos -> Ident -> GenM (Type Pos)
 getIdentType pos ident = do
   (ty, _, _) <- getIdentVal pos ident
   return ty
+
+--  Blocks
+freshLabel :: GenM Label
+freshLabel = state incLabelCnt
+
+setCurrentBlock :: Label -> GenM ()
+setCurrentBlock label = modify (setBlock label)
 
 
 finishBlock :: GenM ()
@@ -182,6 +182,10 @@ insertClassDef (ClsDef pos ident@(Ident i) attrs) clsEnv =
     Nothing -> return $ Map.insert ident (createClass ident attrList) clsEnv
       where
         attrList = (map (\(AttrDef _ ty ident) -> (plainType ty, ident)) attrs)
+
+
+getClassDesc :: Ident -> GenM Class
+getClassDesc ident = gets $ fromJust . (Map.lookup ident) . classEnv
 
 ------------------- Operations on identifiers environment -----------------
 
@@ -246,6 +250,9 @@ emptyStringIdent :: Ident
 emptyStringIdent = Ident ""
 
 checkTypeExists :: Type Pos -> GenM ()
-checkTypeExists (Cls _ ident) = return () -- TODO
+checkTypeExists (Cls pos ident@(Ident i)) = do
+  clsEnv <- gets classEnv
+  case Map.lookup ident clsEnv of
+    Nothing -> failPos pos $ "Type " ++ i ++ " does not exist"
+    _ -> return ()
 checkTypeExists _ = return () -- other types just exist
--- TODO arrays can be created here on demand!

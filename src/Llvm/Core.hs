@@ -81,6 +81,7 @@ data TType =
   | TFun TType [TType]
   | TLab
   | TStrConst Integer
+  | TArr TType
   | TCls Ident
   deriving (Eq)
 
@@ -89,11 +90,12 @@ instance Show TType where
   show TStr = "i8*"
   show TBool = "i1"
   show TVoid = "void"
-  show (TPtr ty) = show ty ++ "*" -- TODO
-  show (TFun ty _) = show ty
+  show (TPtr ty) = show ty ++ "*"
+  show (TFun ty _) = show ty -- TODO ?
   show TLab = "label"
   show (TStrConst len) = "[" ++ show len ++ " x i8]"
-  show (TCls (Ident i)) = i
+  show (TArr ty) = "{" ++ show TInt ++ ", " ++ show (TPtr ty) ++ "}"
+  show (TCls (Ident i)) = "%" ++ i
 
 printLatte :: Type Pos -> String
 printLatte (Int _) = "int"
@@ -117,13 +119,13 @@ plainType (Fun _ ty tys) = TFun (plainType ty) $ map plainType tys
 
 -------------------------- Classes -----------------------------------------
 data Class = Cl {
-  name :: Ident,
+  ty :: TType,
   attrs :: Map.Map Ident (Integer, TType) -- position, type
 }
   deriving (Show)
 
 createClass :: Ident -> [(TType, Ident)] -> Class
-createClass name attrList = Cl name $ Map.fromList enumeratedAttrs
+createClass name attrList = Cl (TCls name) $ Map.fromList enumeratedAttrs
   where
     enumeratedAttrs = zipWith (\i (ty, ident) -> (ident, (i, ty))) [0..] attrList
 
