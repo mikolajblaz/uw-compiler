@@ -45,6 +45,15 @@ checkArrayType pos arrTy = case arrTy of
                 Arr _ ty -> return ty
                 ty -> failPos pos $ "Cannot extract array element from type " ++ show ty
 
+checkTypeExists :: Type Pos -> GenM ()
+checkTypeExists (Cls pos ident@(Ident i)) = do
+  clsEnv <- gets classEnv
+  case Map.lookup ident clsEnv of
+    Nothing -> failPos pos $ "Type " ++ i ++ " does not exist"
+    _ -> return ()
+checkTypeExists (Arr _ ty) = checkTypeExists ty
+checkTypeExists _ = return () -- other types just exist
+
 ------------------------ Analysis --------------------------------------------
 analyzeProgram :: Program Pos -> GenM (Program Pos)
 analyzeProgram (Program pos topDefs) = do
@@ -59,6 +68,7 @@ analyzeProgram (Program pos topDefs) = do
 
 analyzeTopDef :: TopDef Pos -> GenM (TopDef Pos)
 analyzeTopDef (FnDef pos ty ident@(Ident i) args block) = do
+  checkTypeExists ty
   startNewFun ident ty
   analyzeArgs args
   -- NOTE: now, localEnv is set, it will be merged with outerEnv in the following call:
@@ -83,6 +93,7 @@ analyzeArgs args = mapM_ analyzeArg args
 analyzeArg :: Arg Pos -> GenM ()
 analyzeArg (Arg pos ty ident) = do
   forbidVoid ty
+  checkTypeExists ty
   _ <- insertLocalDecl ident ty
   return ()
 
@@ -119,11 +130,13 @@ analyzeStmt (BStmt pos b) = do
 -- analyze single declaration
 analyzeStmt d@(Decl pos ty [NoInit pos2 ident]) = do
   forbidVoid ty
+  checkTypeExists ty
   _ <- insertLocalDecl ident ty
   return (d, False)
 
 analyzeStmt (Decl pos ty [Init pos2 ident expr]) = do
   forbidVoid ty
+  checkTypeExists ty
   (newExpr, exprTy) <- analyzeExpr expr
   checkEqual pos2 ty exprTy
   _ <- insertLocalDecl ident ty

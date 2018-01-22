@@ -43,4 +43,3 @@ int main () {
   printInt(scalProd(a,b));
   return 0 ;
 }
- 

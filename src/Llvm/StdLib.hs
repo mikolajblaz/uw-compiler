@@ -13,7 +13,8 @@ libraryTopDefs = let n = Nothing in [
     FnDef n (Int n)  (Ident "readInt")     [] (Block n []),
     FnDef n (Str n)  (Ident "readString")  [] (Block n []),
     FnDef n (Str n)  (Ident "concatStrings")  [Arg n (Str n) (Ident "s1"), Arg n (Str n) (Ident "s2")] (Block n []),
-    FnDef n (Bool n) (Ident "compareStrings") [Arg n (Str n) (Ident "s1"), Arg n (Str n) (Ident "s2")] (Block n [])
+    FnDef n (Bool n) (Ident "compareStrings") [Arg n (Str n) (Ident "s1"), Arg n (Str n) (Ident "s2")] (Block n []),
+    FnDef n (Str n)  (Ident "malloc")      [Arg n (Int n) (Ident "size")] (Block n [])
   ]
 
 printLibraryDeclarations :: [Instr]
@@ -25,5 +26,6 @@ printLibraryDeclarations = [
     "declare " ++ show TStr  ++ " @readString()",
     "declare " ++ show TStr  ++ " @concatStrings("  ++ show TStr ++ ", " ++ show TStr ++ ")",
     "declare " ++ show TBool ++ " @compareStrings(" ++ show TStr ++ ", " ++ show TStr ++ ")",
+    "declare " ++ show TStr  ++ " @malloc(" ++ show TInt ++ ")",
     ""
   ]

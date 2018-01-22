@@ -1,4 +1,5 @@
 int main() {
+  boolean [] nul;
   int[] a = new int [4];
   a[2] = 10;
   a[3] = a[2];

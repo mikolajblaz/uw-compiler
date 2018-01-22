@@ -252,15 +252,19 @@ genRhs (EString _ str) = do
   return r
 
 genRhs (ENewArray pos ty sizeExpr) = do
-  let elemTy = plainType ty
   sizeAddr <- genRhs sizeExpr
-  dataPtr <- freshRegister $ TPtr elemTy
-  Emitter.emitArrAlloc dataPtr sizeAddr
+  -- dataPtr <- freshRegister $ TPtr elemTy
+  -- Emitter.emitArrAlloc dataPtr sizeAddr
+  -- TODO remove ^
+  let elemTy = plainType ty
+  dataPtr <- genTypeAllocMany elemTy sizeAddr
 
   -- assign size and data values
   let arrPtrTy = TPtr $ TArr elemTy
-  arrPtr <- freshRegister $ arrPtrTy
-  Emitter.emitAlloc arrPtr
+  arrPtr <- genTypeAlloc $ TArr elemTy
+  -- arrPtr <- freshRegister $ arrPtrTy
+  -- Emitter.emitAlloc arrPtr
+
   sizePtr <- genGetElemPtr (TPtr TInt) arrPtr [AInd 0, AInd 0]
   dataPtrPtr <- genGetElemPtr (TPtr (TPtr elemTy)) arrPtr [AInd 0, AInd 1]
   Emitter.emitStore sizeAddr sizePtr
@@ -282,7 +286,7 @@ genRhs (EFieldAcc pos arrExpr (EVar _ (Ident "length"))) = do
   Emitter.emitLoad sizePtr sizeAddr
   return sizeAddr
 
-genRhs (ENull pos ty) = return $ ANul (plainType ty)
+genRhs (ENull pos ty) = return $ ANul $ plainType ty
 
 genRhs (Neg p expr) = genBinOp "sub" (ELitInt p 0) expr
 -- logical not is a substraction from True, when operating on 'i1' type
@@ -394,6 +398,29 @@ genGetElemPtr retTy ptrAddr elemAddrs = do
   Emitter.emitGetElement baseTy r ptrAddr elemAddrs -- TODO
   return r
 
+
+genTypeAlloc :: TType -> GenM Addr
+genTypeAlloc ty = genTypeAllocMany ty (AImm 1 TInt)
+
+-- size of type in bytes is determined  with getelementptr trick
+-- solution described here:
+-- http://nondot.org/sabre/LLVMNotes/SizeOf-OffsetOf-VariableSizedStructs.txt
+genTypeAllocMany :: TType -> Addr -> GenM Addr
+genTypeAllocMany ty sizeAddr = do
+  Emitter.emitComment "calculate allocated memory size for malloc:"
+  -- first, determine type size
+  let ptrTy = TPtr ty
+  sizeOfPtr <- genGetElemPtr ptrTy (ANul ptrTy) [sizeAddr]
+  sizeOf <- freshRegister TInt
+  Emitter.emitPtrToInt sizeOfPtr sizeOf
+  -- now we know the type size
+  voidPtr <- freshRegister TStr
+  (_, _, mallocFunAddr) <- getIdentVal Nothing (Ident "malloc")
+  Emitter.emitCall voidPtr mallocFunAddr [sizeOf]
+  resAddr <- freshRegister (TPtr ty)
+  Emitter.emitBitcast voidPtr resAddr
+  Emitter.emitEmptyLine
+  return resAddr
 
 ------------------------- Conditions ----------------------------------------
 -- | Lazy condition checking by a "jumping code"

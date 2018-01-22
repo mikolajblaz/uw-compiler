@@ -116,7 +116,28 @@ po tej liczbie (m.in. znak '\n')
 
 ## Tablice
 Uwagi:
-* Tablice mogą być dowolnego wymiaru -- TODO
+* Tablice mogą być dowolnego wymiaru, np. poprawny jest kod:
+```
+int[] a = new int [4];
+a[1] = 38;
+int[][] b2 = new int[][3];
+b2[2] = a;
+printInt(b2[2][1]);
+```
+i wypisuje on 33 na wyjście.
+Tak samo jak w Javie, długości tablic "wewnętrznych" nie muszą byc takie same.
+Działa również zagnieżdżona pętla `for`, np. jeśli `array2d` jest zainicjalizowaną
+tablicą typu `string [][]`, to poprawny jest następujący kod:
+```
+for (string[] array1d : array2d) {
+  for (string x : array1d) {
+    printString(x);
+  }
+}
+```
+
+* Tablice nie są inicjalizowane domyślną wartością.
+
 * Zakresy tablic nie są sprawdzane, podobnie nie ma sprawdzenia czy rozmiar
 nowo tworzonej tablicy jest dodatni - nieprawidłowe pod tym względem operacje
 (np. new int[-1]) skutkują niezdefiniowanym zachowaniem.

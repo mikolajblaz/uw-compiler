@@ -109,6 +109,14 @@ emitGetElement baseTy res ptrAddr elemAddrs = emit $
   printAddr res ++ " = getelementptr inbounds " ++ show baseTy ++ ", " ++
     printAddrTyped ptrAddr ++ ", " ++ intercalate ", " (map printAddrTyped elemAddrs)
 
+emitPtrToInt :: Addr -> Addr -> GenM ()
+emitPtrToInt fromPtr toInt = let (resName, resTy) = split toInt in emit $
+  resName ++ " = ptrtoint " ++ printAddrTyped fromPtr ++ " to " ++ show resTy
+
+emitBitcast :: Addr -> Addr -> GenM ()
+emitBitcast fromAddr toAddr = let (resName, resTy) = split toAddr in emit $
+  resName ++ " = bitcast " ++ printAddrTyped fromAddr ++ " to " ++ show resTy
+
 ------------------------- Output (no state) ----------------------------------
 -- Types
 outputTypeDef :: TType -> [TType] -> Instr

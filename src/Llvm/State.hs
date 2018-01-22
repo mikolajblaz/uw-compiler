@@ -225,7 +225,6 @@ insertUniqueNewIdent ident ty addr env = do
 
 insertLocalDecl :: Ident -> (Type Pos) -> GenM Addr
 insertLocalDecl ident ty = do
-  checkTypeExists ty
   uniqueIdent <- freshIdent ident
   let identAddr = ALoc uniqueIdent $ plainType ty
   blockEnv <- gets blockEnv
@@ -248,14 +247,6 @@ addStringConstant sc = modify (\(GenSt envs cnts blocks ret consts) ->
 -- special identifier, cannot be created by a user
 emptyStringIdent :: Ident
 emptyStringIdent = Ident ""
-
-checkTypeExists :: Type Pos -> GenM ()
-checkTypeExists (Cls pos ident@(Ident i)) = do
-  clsEnv <- gets classEnv
-  case Map.lookup ident clsEnv of
-    Nothing -> failPos pos $ "Type " ++ i ++ " does not exist"
-    _ -> return ()
-checkTypeExists _ = return () -- other types just exist
 
 -- TODO remove
 failDebug :: String -> GenM a
