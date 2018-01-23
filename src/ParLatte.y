@@ -19,34 +19,34 @@ import ErrM
   '&&' { PT _ (TS _ 4) }
   '(' { PT _ (TS _ 5) }
   ')' { PT _ (TS _ 6) }
-  '*' { PT _ (TS _ 7) }
-  '+' { PT _ (TS _ 8) }
-  '++' { PT _ (TS _ 9) }
-  ',' { PT _ (TS _ 10) }
-  '-' { PT _ (TS _ 11) }
-  '--' { PT _ (TS _ 12) }
-  '.' { PT _ (TS _ 13) }
-  '/' { PT _ (TS _ 14) }
-  ':' { PT _ (TS _ 15) }
-  ';' { PT _ (TS _ 16) }
-  '<' { PT _ (TS _ 17) }
-  '<=' { PT _ (TS _ 18) }
-  '=' { PT _ (TS _ 19) }
-  '==' { PT _ (TS _ 20) }
-  '>' { PT _ (TS _ 21) }
-  '>=' { PT _ (TS _ 22) }
-  '[' { PT _ (TS _ 23) }
-  '[]' { PT _ (TS _ 24) }
-  ']' { PT _ (TS _ 25) }
-  'boolean' { PT _ (TS _ 26) }
-  'class' { PT _ (TS _ 27) }
-  'else' { PT _ (TS _ 28) }
-  'false' { PT _ (TS _ 29) }
-  'for' { PT _ (TS _ 30) }
-  'if' { PT _ (TS _ 31) }
-  'int' { PT _ (TS _ 32) }
-  'new' { PT _ (TS _ 33) }
-  'null' { PT _ (TS _ 34) }
+  ')null' { PT _ (TS _ 7) }
+  '*' { PT _ (TS _ 8) }
+  '+' { PT _ (TS _ 9) }
+  '++' { PT _ (TS _ 10) }
+  ',' { PT _ (TS _ 11) }
+  '-' { PT _ (TS _ 12) }
+  '--' { PT _ (TS _ 13) }
+  '.' { PT _ (TS _ 14) }
+  '/' { PT _ (TS _ 15) }
+  ':' { PT _ (TS _ 16) }
+  ';' { PT _ (TS _ 17) }
+  '<' { PT _ (TS _ 18) }
+  '<=' { PT _ (TS _ 19) }
+  '=' { PT _ (TS _ 20) }
+  '==' { PT _ (TS _ 21) }
+  '>' { PT _ (TS _ 22) }
+  '>=' { PT _ (TS _ 23) }
+  '[' { PT _ (TS _ 24) }
+  '[]' { PT _ (TS _ 25) }
+  ']' { PT _ (TS _ 26) }
+  'boolean' { PT _ (TS _ 27) }
+  'class' { PT _ (TS _ 28) }
+  'else' { PT _ (TS _ 29) }
+  'false' { PT _ (TS _ 30) }
+  'for' { PT _ (TS _ 31) }
+  'if' { PT _ (TS _ 32) }
+  'int' { PT _ (TS _ 33) }
+  'new' { PT _ (TS _ 34) }
   'return' { PT _ (TS _ 35) }
   'string' { PT _ (TS _ 36) }
   'true' { PT _ (TS _ 37) }
@@ -140,10 +140,10 @@ Attr :: {
 ListAttr :: {
   (Maybe (Int, Int), [Attr (Maybe (Int, Int))]) 
 }
-: Attr {
+: Attr ';' {
   (fst $1, (:[]) (snd $1)) 
 }
-| Attr ',' ListAttr {
+| Attr ';' ListAttr {
   (fst $1, (:) (snd $1)(snd $3)) 
 }
 
@@ -255,37 +255,27 @@ ListType :: {
 : {
   (Nothing, [])
 }
-| Type {
-  (fst $1, (:[]) (snd $1)) 
-}
-| Type ',' ListType {
-  (fst $1, (:) (snd $1)(snd $3)) 
-}
-
-Expr8 :: {
-  (Maybe (Int, Int), Expr (Maybe (Int, Int)))
-}
-: Ident {
-  (fst $1, AbsLatte.EVar (fst $1)(snd $1)) 
-}
-| Expr8 '[' Expr ']' {
-  (fst $1, AbsLatte.EArrayAcc (fst $1)(snd $1)(snd $3)) 
-}
-| Ident '(' ListExpr ')' {
-  (fst $1, AbsLatte.EApp (fst $1)(snd $1)(snd $3)) 
-}
-| '(' Expr ')' {
-  (Just (tokenLineCol $1), snd $2)
+| ListType Type ',' {
+  (fst $1, flip (:) (snd $1)(snd $2)) 
 }
 
 Expr7 :: {
   (Maybe (Int, Int), Expr (Maybe (Int, Int)))
 }
-: Expr8 '.' Expr7 {
+: Ident {
+  (fst $1, AbsLatte.EVar (fst $1)(snd $1)) 
+}
+| Ident '(' ListExpr ')' {
+  (fst $1, AbsLatte.EApp (fst $1)(snd $1)(snd $3)) 
+}
+| Expr7 '[' Expr ']' {
+  (fst $1, AbsLatte.EArrayAcc (fst $1)(snd $1)(snd $3)) 
+}
+| Expr7 '.' Ident {
   (fst $1, AbsLatte.EFieldAcc (fst $1)(snd $1)(snd $3)) 
 }
-| Expr8 {
-  (fst $1, snd $1)
+| '(' Expr ')' {
+  (Just (tokenLineCol $1), snd $2)
 }
 
 Expr6 :: {
@@ -296,6 +286,9 @@ Expr6 :: {
 }
 | 'new' Type {
   (Just (tokenLineCol $1), AbsLatte.ENewObj (Just (tokenLineCol $1)) (snd $2)) 
+}
+| '(' Type ')null' {
+  (Just (tokenLineCol $1), AbsLatte.ENull (Just (tokenLineCol $1)) (snd $2)) 
 }
 | Integer {
   (fst $1, AbsLatte.ELitInt (fst $1)(snd $1)) 

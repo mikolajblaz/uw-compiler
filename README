@@ -168,10 +168,8 @@ Kontrukcja `for (type x : a) stmt` jest tłumaczona na etapie frontendu na:
 }
 ```
 Przy czym zmienne `_i` i `_arr` są niepoprawnymi zmiennymi Latte
-(ze względu na znak _ na początku).
-Dzięki temu zapewniona jest poprawność powyższej uwagi o widoczności zmiennych.
+(ze względu na znak _ na początku) - dzięki temu zapewniona jest poprawność powyższej uwagi o widoczności zmiennych.
 
 ## Struktury
-* Definicje wszstkich klas muszą pojawić się przed definicjami funkcji.
-* Wskaźnik _null_ jest typowany, składnia: `(typ) null`.
+* Wskaźnik _null_ jest typowany, składnia: `(typ)null` (istotny jest brak spacji po nawiasie).
 Jawne określenie typu dla wskaźnika jest możliwe (wymagane) tylko dla _null_.

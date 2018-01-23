@@ -102,8 +102,8 @@ instance Print (Arg a) where
 instance Print (Attr a) where
   prt i e = case e of
     AttrDef _ type_ id -> prPrec i 0 (concatD [prt 0 type_, prt 0 id])
-  prtList _ [x] = (concatD [prt 0 x])
-  prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])
+  prtList _ [x] = (concatD [prt 0 x, doc (showString ";")])
+  prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ";"), prt 0 xs])
 instance Print (Block a) where
   prt i e = case e of
     Block _ stmts -> prPrec i 0 (concatD [doc (showString "{"), prt 0 stmts, doc (showString "}")])
@@ -141,17 +141,16 @@ instance Print (Type a) where
     Cls _ id -> prPrec i 0 (concatD [prt 0 id])
     Fun _ type_ types -> prPrec i 0 (concatD [prt 0 type_, doc (showString "("), prt 0 types, doc (showString ")")])
   prtList _ [] = (concatD [])
-  prtList _ [x] = (concatD [prt 0 x])
   prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])
 instance Print (Expr a) where
   prt i e = case e of
-    EVar _ id -> prPrec i 8 (concatD [prt 0 id])
-    EArrayAcc _ expr1 expr2 -> prPrec i 8 (concatD [prt 8 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
-    EApp _ id exprs -> prPrec i 8 (concatD [prt 0 id, doc (showString "("), prt 0 exprs, doc (showString ")")])
-    EFieldAcc _ expr1 expr2 -> prPrec i 7 (concatD [prt 8 expr1, doc (showString "."), prt 7 expr2])
+    EVar _ id -> prPrec i 7 (concatD [prt 0 id])
+    EApp _ id exprs -> prPrec i 7 (concatD [prt 0 id, doc (showString "("), prt 0 exprs, doc (showString ")")])
+    EArrayAcc _ expr1 expr2 -> prPrec i 7 (concatD [prt 7 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
+    EFieldAcc _ expr id -> prPrec i 7 (concatD [prt 7 expr, doc (showString "."), prt 0 id])
     ENewArray _ type_ expr -> prPrec i 6 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
     ENewObj _ type_ -> prPrec i 6 (concatD [doc (showString "new"), prt 0 type_])
-    ENull _ type_ -> prPrec i 6 (concatD [doc (showString "("), prt 0 type_, doc (showString ")"), doc (showString "null")])
+    ENull _ type_ -> prPrec i 6 (concatD [doc (showString "("), prt 0 type_, doc (showString ")null")])
     ELitInt _ n -> prPrec i 6 (concatD [prt 0 n])
     ELitTrue _ -> prPrec i 6 (concatD [doc (showString "true")])
     ELitFalse _ -> prPrec i 6 (concatD [doc (showString "false")])

@@ -1,0 +1,17 @@
+int main() {
+  int x;
+  // printInt(x.length);
+  int[] a;
+  printInt(a.length);
+
+  s t = (s)null;
+  s r = new s;
+  printInt(t.z);
+
+  return 0;
+}
+
+class s {
+  int x;
+  boolean y;
+}

@@ -3,6 +3,8 @@ module Llvm.Generator where
 import Control.Monad ( unless )
 import Control.Monad.Trans.State.Lazy
 import Data.List ( partition )
+import Data.Maybe ( fromJust )
+import qualified Data.Map as Map
 
 import AbsLatte
 
@@ -15,7 +17,7 @@ import qualified Llvm.StdLib as Lib
 processProgram :: Program Pos -> GenM String
 processProgram (Program _ topDefs) = do
   let (fnDefs, clsDefs) = partition isFnDef topDefs
-  buildTopEnv (Lib.libraryTopDefs ++ topDefs)
+  buildTopEnv (Lib.libraryTopDefs ++ fnDefs)
   buildClassEnv clsDefs
   let libraryOutput = Lib.printLibraryDeclarations
   -- NOTE: we don't process libraryTopDefs, we just put it to topEnv
@@ -23,7 +25,7 @@ processProgram (Program _ topDefs) = do
   funOuts <- mapM processTopDef fnDefs
 
   constants <- gets sConsts >>= (return . Emitter.outputStringConstants)
-  return $ unlines $ libraryOutput ++ constants ++ (concat (classOuts ++ funOuts))
+  return $ unlines $ libraryOutput ++ constants ++ (concat (classOuts ++ [[""]] ++ funOuts))
 
 
 -- | Return instructions in proper order
@@ -253,17 +255,12 @@ genRhs (EString _ str) = do
 
 genRhs (ENewArray pos ty sizeExpr) = do
   sizeAddr <- genRhs sizeExpr
-  -- dataPtr <- freshRegister $ TPtr elemTy
-  -- Emitter.emitArrAlloc dataPtr sizeAddr
-  -- TODO remove ^
   let elemTy = plainType ty
   dataPtr <- genTypeAllocMany elemTy sizeAddr
 
   -- assign size and data values
   let arrPtrTy = TPtr $ TArr elemTy
   arrPtr <- genTypeAlloc $ TArr elemTy
-  -- arrPtr <- freshRegister $ arrPtrTy
-  -- Emitter.emitAlloc arrPtr
 
   sizePtr <- genGetElemPtr (TPtr TInt) arrPtr [AInd 0, AInd 0]
   dataPtrPtr <- genGetElemPtr (TPtr (TPtr elemTy)) arrPtr [AInd 0, AInd 1]
@@ -279,12 +276,18 @@ genRhs e@(EArrayAcc pos arrExpr iExpr) = do
   Emitter.emitArrLoad elemPtr elemAddr
   return elemAddr
 
-genRhs (EFieldAcc pos arrExpr (EVar _ (Ident "length"))) = do
-  arrPtr <- genRhs arrExpr
-  sizePtr <- genGetElemPtr (TPtr TInt) arrPtr [AInd 0, AInd 0]
-  sizeAddr <- freshRegister TInt
-  Emitter.emitLoad sizePtr sizeAddr
-  return sizeAddr
+genRhs e@(EFieldAcc pos expr fieldExpr) = do
+  fieldPtr <- genLhs e
+  let TPtr fieldTy = getAddrType fieldPtr
+  fieldAddr <- freshRegister fieldTy
+  Emitter.emitLoad fieldPtr fieldAddr
+  return fieldAddr
+
+genRhs (ENewObj pos posTy) = do
+  let clsPtrTy = plainType posTy
+  let TPtr clsTy = clsPtrTy
+  clsPtr <- genTypeAlloc clsTy
+  return clsPtr
 
 genRhs (ENull pos ty) = return $ ANul $ plainType ty
 
@@ -339,7 +342,6 @@ genRhs (ERel pos expr rel expr2) = do
 genRhs e@(EAnd _ _ _) = genAndOr e
 genRhs e@(EOr _ _ _) = genAndOr e
 
-genRhs _ = fail "Compiler error" -- this shouldn't happen
 
 genAndOr :: Expr Pos -> GenM Addr
 genAndOr e = do
@@ -385,7 +387,19 @@ genLhs (EArrayAcc pos arrExpr iExpr) = do
   Emitter.emitLoad dataPtrPtr dataPtr
   genGetElemPtr (TPtr elemTy) dataPtr [indexAddr]
 
-genLhs (EFieldAcc pos arrExpr (EVar _ (Ident "length"))) = undefined -- TODO
+genLhs (EFieldAcc pos expr ident) = do
+  addr <- genRhs expr
+  let ty = getAddrType addr
+  case ty of
+    -- it can't be Lhs (Frontend forbids it),
+    -- but for simple logic, .length is handled here
+    TPtr (TArr _) -> genGetElemPtr (TPtr TInt) addr [AInd 0, AInd 0]
+    TPtr t@(TCls name) -> do
+                        (Cl clsTy attrs) <- getClassDesc name
+                        let (index, fieldTy) = fromJust $ Map.lookup ident attrs
+                        genGetElemPtr (TPtr fieldTy) addr [AInd 0, AInd index]
+
+    _ -> failPos pos "Compiler error" -- this shouldn't happen after typecheck
 
 genLhs _ = fail "Compiler error" -- this shouldn't happen after typecheck
 
@@ -402,7 +416,7 @@ genGetElemPtr retTy ptrAddr elemAddrs = do
 genTypeAlloc :: TType -> GenM Addr
 genTypeAlloc ty = genTypeAllocMany ty (AImm 1 TInt)
 
--- size of type in bytes is determined  with getelementptr trick
+-- size of type in bytes is determined with getelementptr trick
 -- solution described here:
 -- http://nondot.org/sabre/LLVMNotes/SizeOf-OffsetOf-VariableSizedStructs.txt
 genTypeAllocMany :: TType -> Addr -> GenM Addr

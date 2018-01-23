@@ -122,10 +122,19 @@ plainType (Str _) = TStr
 plainType (Bool _) = TBool
 plainType (Void _) = TVoid
 plainType (Arr _ ty) = TPtr $ TArr $ plainType ty
-plainType (Cls _ ident) = TCls ident
+plainType (Cls _ ident) = TPtr $ TCls ident
 plainType (Fun _ ty tys) = TFun (plainType ty) $ map plainType tys
 
-
+-- reverse function to plainType
+toPosType :: TType -> Pos -> Type Pos
+toPosType TInt pos = Int pos
+toPosType TStr pos = Str pos
+toPosType TBool pos = Bool pos
+toPosType TVoid pos = Void pos
+toPosType (TArr ty) pos = Arr pos (toPosType ty pos)
+toPosType (TCls ident) pos = Cls pos ident
+toPosType (TFun ty argTys) pos = Fun pos (toPosType ty pos) (map (\t -> toPosType t pos) argTys)
+toPosType _ _ = undefined -- not needed
 
 -------------------------- Classes -----------------------------------------
 data Class = Cl {
@@ -163,6 +172,7 @@ defaultInit (Int pos) = ELitInt pos 0
 defaultInit (Bool pos) = ELitFalse pos
 defaultInit (Str pos) = EString pos ""
 defaultInit (Arr pos ty) = ENull pos (Arr pos ty)
+defaultInit (Cls pos ident) = ENull pos (Cls pos ident)
 defaultInit (Void _) = undefined    -- this should not happen
 defaultInit (Fun _ _ _) = undefined -- this should not happen
 

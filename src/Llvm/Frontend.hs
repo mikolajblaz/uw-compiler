@@ -62,8 +62,8 @@ analyzeProgram (Program pos topDefs) = do
   buildClassEnv clsDefs
   checkMain
   -- NOTE: we don't analyze libraryTopDefs, we just put it to topEnv
-  newTopDefs <- mapM analyzeTopDef topDefs
-  return $ Program pos newTopDefs
+  newTopDefs <- mapM analyzeTopDef fnDefs
+  return $ Program pos (clsDefs ++ newTopDefs)
 
 
 analyzeTopDef :: TopDef Pos -> GenM (TopDef Pos)
@@ -211,7 +211,7 @@ analyzeStmt (For pos ty ident arrExpr stmt) = do
 
   let index = Ident "_i"    -- '_i' is not a valid Latte variable name, so no conflict
   let array = Ident "_arr"  -- '_arr' is not a valid Latte variable name, so no conflict
-  let whileCond = ERel pos (EVar pos index) (LTH pos) (EFieldAcc pos (EVar pos array) (EVar pos (Ident "length")))
+  let whileCond = ERel pos (EVar pos index) (LTH pos) (EFieldAcc pos (EVar pos array) (Ident "length"))
   let forAsWhile = BStmt pos $ Block pos [
                       Decl pos arrTy [Init pos array newArrExpr],
                       Decl pos (Int pos) [NoInit pos index],
@@ -366,22 +366,27 @@ analyzeExpr (EArrayAcc pos arrExpr iExpr) = do
   return (EArrayAcc pos newArrExpr newIndexExpr, elemTy)
 
 
-analyzeExpr (EFieldAcc pos expr fieldExpr) = do
+analyzeExpr (EFieldAcc pos expr ident@(Ident i)) = do
   (newExpr, exprTy) <- analyzeExpr expr
-  fieldTy <- analyzeFieldExpr exprTy fieldExpr
-  return (EFieldAcc pos newExpr fieldExpr, fieldTy)
+  fieldTy <- case exprTy of
+              (Arr p _) -> if i == "length"
+                              then return $ Int pos
+                              else failPos p $ "No such field: " ++ show i ++ " in array type"
+              cls@(Cls p name) -> do
+                                (Cl ty attrs) <- getClassDesc name
+                                case Map.lookup ident attrs of
+                                  Nothing -> failPos pos $ "No such field: " ++ show i ++
+                                              " in " ++ printLatte (toPosType ty pos) ++ " type"
+                                  Just (_, fieldTy) -> return $ toPosType fieldTy p
+              ty -> failPos pos $ "Type " ++ printLatte ty ++ " has no fields"
 
-analyzeExpr e@(ENull _ ty) = return (e, ty)
+  return (EFieldAcc pos newExpr ident, fieldTy)
 
+analyzeExpr e@(ENewObj pos ty@(Cls _ _)) = checkTypeExists ty >> return (e, ty)
+analyzeExpr (ENewObj pos _) = failPos pos $ "Only class types can be constructed with \"new\""
 
-analyzeFieldExpr :: Type Pos -> Expr Pos -> GenM (Type Pos)
-analyzeFieldExpr (Arr pos _) fieldExpr = do
-  case fieldExpr of
-    EVar _ (Ident "length") -> return $ Int pos
-    EVar p _ -> failPos p $ "Arrays have only one field 'length'"
-    e -> failPos (getExprPos e) $ "Not a field expression"
+analyzeExpr e@(ENull _ ty) = checkTypeExists ty >> return (e, ty)
 
-analyzeFieldExpr _ _ = fail "Structs not implemented"
 
 -- Lhs
 analyzeLhs :: Expr Pos -> GenM (Type Pos)
@@ -389,9 +394,21 @@ analyzeLhs (EVar pos ident) = getIdentType pos ident
 
 analyzeLhs (EArrayAcc pos arrExpr iExpr) = do
   arrTy <- analyzeLhs arrExpr
-  checkArrayType pos arrTy
+  elemTy <- checkArrayType pos arrTy
 
--- TODO Field Acces
+  (_, indexTy) <- analyzeExpr iExpr
+  checkEqual (getExprPos iExpr) (Int Nothing) indexTy
+  return elemTy
+
+
+analyzeLhs e@(EFieldAcc pos expr ident) = do
+  (newExpr, exprTy) <- analyzeExpr expr
+  case exprTy of
+    Arr _ _ -> failPos pos $ "Cannot assign fields of array type"
+    _ -> return ()
+  (_, eTy) <- analyzeExpr e
+  return eTy
+
 analyzeLhs expr = failPos (getExprPos expr) $ "Invalid left-hand-side expression."
 
 

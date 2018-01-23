@@ -16,7 +16,7 @@ separator  Arg "," ;
 
 AttrDef.   Attr ::= Type Ident ;
 
-separator nonempty Attr "," ;
+terminator nonempty Attr ";" ;
 
 -- statements ----------------------------------------------
 
@@ -78,20 +78,19 @@ separator  Type "," ;
 
 -- Added
 
-EVar.      Expr8 ::= Ident ;
+EVar.      Expr7 ::= Ident ;
 
-EArrayAcc. Expr8 ::= Expr8 "[" Expr "]" ;
+EApp.      Expr7 ::= Ident "(" [Expr] ")" ;
 
-EApp.      Expr8 ::= Ident "(" [Expr] ")" ;
+EArrayAcc. Expr7 ::= Expr7 "[" Expr "]" ;
 
-EFieldAcc. Expr7 ::= Expr8 "." Expr7 ;
+EFieldAcc. Expr7 ::= Expr7 "." Ident ;
 
 ENewArray. Expr6 ::= "new" Type "[" Expr "]" ;
 
-ENewObj.   Expr6 ::= "new" Type ; -- TODO
+ENewObj.   Expr6 ::= "new" Type ;
 
--- TODO remove internal
-internal   ENull.     Expr6 ::= "(" Type ")" "null" ;
+ENull.     Expr6 ::= "(" Type ")null" ;
 
 
 -- Original
@@ -118,7 +117,7 @@ EAnd.      Expr1 ::= Expr2 "&&" Expr1 ;
 
 EOr.       Expr ::= Expr1 "||" Expr ;
 
-coercions  Expr 8 ;
+coercions  Expr 7 ;
 
 separator  Expr "," ;
 

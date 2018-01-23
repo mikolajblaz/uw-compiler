@@ -1,0 +1,28 @@
+int main() {
+
+  int x;
+  // printInt(x.length);
+  int[] a = new int [8];
+  printInt(a.length);
+
+  st t = (st)null;
+  st r = new st;
+  st s;
+  st st;
+  printInt(r.x);
+  r.x = 7;
+  printInt(r.x);
+  printInt(getX());
+
+  return 0;
+}
+
+class st {
+  boolean y;
+  int x;
+}
+
+int getX() {
+  st ret = new st;
+  return ret.x;
+}

@@ -100,9 +100,9 @@ instance Functor Type where
         Fun a type_ types -> Fun (f a) (fmap f type_) (map (fmap f) types)
 data Expr a
     = EVar a Ident
-    | EArrayAcc a (Expr a) (Expr a)
     | EApp a Ident [Expr a]
-    | EFieldAcc a (Expr a) (Expr a)
+    | EArrayAcc a (Expr a) (Expr a)
+    | EFieldAcc a (Expr a) Ident
     | ENewArray a (Type a) (Expr a)
     | ENewObj a (Type a)
     | ENull a (Type a)
@@ -122,9 +122,9 @@ data Expr a
 instance Functor Expr where
     fmap f x = case x of
         EVar a ident -> EVar (f a) ident
-        EArrayAcc a expr1 expr2 -> EArrayAcc (f a) (fmap f expr1) (fmap f expr2)
         EApp a ident exprs -> EApp (f a) ident (map (fmap f) exprs)
-        EFieldAcc a expr1 expr2 -> EFieldAcc (f a) (fmap f expr1) (fmap f expr2)
+        EArrayAcc a expr1 expr2 -> EArrayAcc (f a) (fmap f expr1) (fmap f expr2)
+        EFieldAcc a expr ident -> EFieldAcc (f a) (fmap f expr) ident
         ENewArray a type_ expr -> ENewArray (f a) (fmap f type_) (fmap f expr)
         ENewObj a type_ -> ENewObj (f a) (fmap f type_)
         ENull a type_ -> ENull (f a) (fmap f type_)
